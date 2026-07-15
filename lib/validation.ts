@@ -48,8 +48,13 @@ export const donationSchema = z.object({
   method: z.enum(['card', 'upi', 'netbanking', 'wallet']),
 })
 
-export const joinSchema = z.object({
-  id: z.coerce.number().int().positive(),
+/** Join routes take only the target id — the joiner is the authenticated caller. */
+export const joinGroupSchema = z.object({
+  groupId: z.coerce.number().int().positive(),
+})
+
+export const joinCampaignSchema = z.object({
+  campaignId: z.coerce.number().int().positive(),
 })
 
 export const sensorDataSchema = z.object({
