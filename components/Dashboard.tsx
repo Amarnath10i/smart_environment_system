@@ -1,12 +1,15 @@
 'use client'
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Thermometer, Droplets, Wind, Activity, Radio, Newspaper, Users, Megaphone, HeartHandshake, MessageSquare, MapPin, RefreshCw, Plus, X, Send, AlertTriangle, Globe, UserCircle, Lock, Mail, LogOut, LayoutDashboard, BarChart3, CheckCircle, Smartphone, CreditCard, Wallet, ChevronRight, Bell, Zap } from 'lucide-react'
+import { Thermometer, Droplets, Wind, Activity, Radio, Newspaper, Users, Megaphone, HeartHandshake, MessageSquare, MapPin, Navigation, RefreshCw, Plus, X, Send, AlertTriangle, Globe, UserCircle, Lock, Mail, LogOut, LayoutDashboard, BarChart3, CheckCircle, Smartphone, CreditCard, Wallet, ChevronRight, Bell, Zap } from 'lucide-react'
 import { format } from 'date-fns'
 import { apiGet, apiPost, ApiError, type Page } from '@/lib/api-client'
 import { useEventStream } from '@/lib/use-event-stream'
 import { Logo } from '@/components/Logo'
 import { PaymentIcon } from '@/components/PaymentIcons'
+import { Globe as GlobeView } from '@/components/Globe'
+import { ShareButtons } from '@/components/ShareButtons'
+import { useCurrentPlace } from '@/lib/use-current-place'
 import { CURRENCIES, BANKS, currency, methodsFor, formatMoney, toINR, methodName } from '@/lib/payments'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -302,90 +305,195 @@ function AuthScreen({onAuth}:{onAuth:(u:User,t:string,msg?:string)=>void}) {
  */
 const latestOf = (s:Sensor) => s.data.length?s.data[s.data.length-1]:undefined
 
+/** Sentinel id for the viewer's own position, which has no sensor rows. */
+const HERE_KEY='__here__'
+
+type Place = { key:string; name:string; city:string; lat:number; lon:number; sensors:Sensor[] }
+
 function Overview({sensors}:{sensors:Sensor[]}) {
-  // Deduplicate: one card per sensor type, keeping whichever has the most
-  // recent reading.
-  const unique = sensors.reduce((acc,s)=>{
-    const prev=acc[s.type]
-    if(!prev||new Date(latestOf(s)?.timestamp||0)>new Date(latestOf(prev)?.timestamp||0)) acc[s.type]=s
-    return acc
-  },{} as Record<string,Sensor>)
+  // Group by physical place: the globe plots locations, not sensor rows, and a
+  // city usually carries more than one instrument.
+  const places = useMemo(()=>{
+    const m = new Map<string,Place>()
+    for(const s of sensors){
+      if(s.lat==null||s.lon==null) continue
+      const cur = m.get(s.location)
+      if(!cur) m.set(s.location,{key:s.location,name:s.location.split(',')[0].trim(),city:(s.location.split(',')[1]||'').trim(),lat:s.lat,lon:s.lon,sensors:[s]})
+      // One reading per instrument type; keep the freshest.
+      else {
+        const same = cur.sensors.find(x=>x.type===s.type)
+        if(!same) cur.sensors.push(s)
+        else if(new Date(latestOf(s)?.timestamp||0)>new Date(latestOf(same)?.timestamp||0)) cur.sensors[cur.sensors.indexOf(same)]=s
+      }
+    }
+    // Freshest place first, so the globe opens on live data rather than on
+    // whichever row the database happened to return first.
+    const freshest=(p:Place)=>Math.max(...p.sensors.map(s=>new Date(latestOf(s)?.timestamp||0).getTime()))
+    return [...m.values()].sort((a,b)=>freshest(b)-freshest(a))
+  },[sensors])
 
-  const list = Object.values(unique)
-  const active = sensors.filter(s=>s.status==='active').length
+  // The viewer's own position, from the same geolocation + Open-Meteo path the
+  // Sensors tab uses. Resolves to null if permission is refused, in which case
+  // the globe simply falls back to the sensor network.
+  const {place:here,loading:hereLoading}=useCurrentPlace()
 
-  return <div className="anim-up" style={{display:'flex',flexDirection:'column',gap:20}}>
-    {/* Stat row */}
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:12}}>
-      {list.map(s=>{
-        const v=latestOf(s)?.value
-        const c=sColor(s.type)
-        return <div key={s.type} className="card" style={{padding:'18px 20px',position:'relative',overflow:'hidden'}}>
-          <div style={{position:'absolute',top:-12,right:-12,opacity:0.06,transform:'scale(3.2)',color:c}}>{sIcon(s.type)}</div>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-            <div style={{width:32,height:32,borderRadius:9,background:`${c}18`,border:`1px solid ${c}30`,display:'flex',alignItems:'center',justifyContent:'center',color:c}}>{sIcon(s.type)}</div>
-            <span className="badge b-green" style={{fontSize:9}}><span className="dot dot-green"/>{s.status}</span>
-          </div>
-          <div style={{display:'flex',alignItems:'baseline',gap:4,marginBottom:4}}>
-            <span className="val" style={{fontSize:28,color:c,textShadow:`0 0 18px ${c}55`}}>{v!=null?v.toFixed(1):'—'}</span>
-            <span style={{fontSize:13,color:'var(--tx3)'}}>{sUnit(s.type)}</span>
-          </div>
-          <p style={{fontSize:12,fontWeight:600,textTransform:'capitalize',marginBottom:2}}>{sLabel(s.type)}</p>
-          <p style={{fontSize:11,color:'var(--tx3)',display:'flex',alignItems:'center',gap:4}}><MapPin size={10}/>{s.location}</p>
-        </div>
-      })}
-      <div className="card" style={{padding:'18px 20px'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-          <div style={{width:32,height:32,borderRadius:9,background:'rgba(180,124,255,0.14)',border:'1px solid rgba(180,124,255,0.28)',display:'flex',alignItems:'center',justifyContent:'center',color:'#B47CFF'}}><Radio size={15}/></div>
-        </div>
-        <div style={{display:'flex',alignItems:'baseline',gap:4,marginBottom:4}}>
-          <span className="val" style={{fontSize:28,color:'#B47CFF'}}>{active}</span>
-          <span style={{fontSize:13,color:'var(--tx3)'}}>/{sensors.length}</span>
-        </div>
-        <p style={{fontSize:12,fontWeight:600,marginBottom:2}}>Active Sensors</p>
-        <p style={{fontSize:11,color:'var(--tx3)'}}>Network online</p>
+  const allPlaces = useMemo(()=>{
+    if(!here) return places
+    return [{key:HERE_KEY,name:here.city,city:'Your location',lat:here.lat,lon:here.lon,sensors:[]} as Place,...places]
+  },[places,here])
+
+  const [sel,setSel]=useState<string|null>(null)
+  useEffect(()=>{
+    // Prefer the viewer's own location once it arrives — Astronomy opens on
+    // where you are, not on the first row in a table.
+    if(here&&sel===null) { setSel(HERE_KEY); return }
+    if(allPlaces.length&&sel!==null&&!allPlaces.some(p=>p.key===sel)) setSel(allPlaces[0].key)
+    else if(!hereLoading&&sel===null&&allPlaces.length) setSel(allPlaces[0].key)
+  },[allPlaces,sel,here,hereLoading])
+  const active = allPlaces.find(p=>p.key===sel) ?? allPlaces[0]
+
+  const markers = useMemo(()=>allPlaces.map(p=>({
+    id:p.key, lat:p.lat, lon:p.lon, label:p.name,
+    color:p.key===HERE_KEY?'#FFFFFF':sColor(p.sensors[0]?.type??''),
+  })),[allPlaces])
+
+  const activeCount = sensors.filter(s=>s.status==='active').length
+  // Charts: one series per instrument type, from whichever sensor is freshest.
+  const byType = useMemo(()=>{
+    const m:Record<string,Sensor>={}
+    for(const s of sensors){
+      const prev=m[s.type]
+      if(!prev||new Date(latestOf(s)?.timestamp||0)>new Date(latestOf(prev)?.timestamp||0)) m[s.type]=s
+    }
+    return Object.values(m)
+  },[sensors])
+
+  return <div className="anim-up" style={{display:'flex',flexDirection:'column',gap:40}}>
+
+    {/* ─── Hero: the globe, and the conditions at whatever it is looking at ── */}
+    <section>
+      <div style={{marginBottom:16}}>
+        <h2 style={{fontSize:26,fontWeight:600,letterSpacing:'-0.03em',color:'var(--tx1)'}}>Live conditions</h2>
+        <p style={{fontSize:14,color:'var(--tx3)',marginTop:3}}>
+          {places.length} monitored {places.length===1?'location':'locations'} · {activeCount} of {sensors.length} sensors reporting
+        </p>
       </div>
-    </div>
 
-    {/* Mini charts */}
-    {/* 420px min => two columns on a desktop width, so four sensors form a
-        2x2 block instead of 3 + one orphan beside dead space. */}
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(420px,1fr))',gap:16}}>
-      {list.map(s=>{
-        const c=sColor(s.type)
-        // /api/sensors already returns oldest -> newest; reversing here made
-        // every chart read right-to-left.
-        const pts=s.data.map(d=>({t:format(new Date(d.timestamp),'HH:mm'),v:parseFloat(d.value.toFixed(2))}))
-        const latest=pts.length?pts[pts.length-1].v:null
-        return <div key={s.type} className="card" style={{padding:'18px 18px 10px'}}>
-          <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:10}}>
-            <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <span style={{color:c,display:'flex'}}>{sIcon(s.type)}</span>
-              <div>
-                <p style={{fontSize:15,fontWeight:590,color:'var(--tx1)',letterSpacing:'-0.015em'}}>{sLabel(s.type)}</p>
-                <div style={{display:'flex',alignItems:'center',gap:4,marginTop:1}}>
-                  <MapPin size={10} style={{color:'var(--tx3)'}}/><span style={{fontSize:11.5,color:'var(--tx3)'}}>{s.location}</span>
+      <div className="globe-hero">
+        <div className="globe-stage">
+          <GlobeView markers={markers} selectedId={sel} onSelect={setSel}/>
+          {/* Place chips float over the globe rather than stacking below it. */}
+          <div className="globe-chips">
+            {allPlaces.map(p=>{
+              const on=p.key===sel
+              const isHere=p.key===HERE_KEY
+              return <button key={p.key} onClick={()=>setSel(p.key)} className={`chip${on?' on':''}`}>
+                {isHere
+                  ? <Navigation size={11} style={{color:'#FFFFFF'}}/>
+                  : <span className="dot" style={{background:sColor(p.sensors[0]?.type??''),animation:'none',width:6,height:6}}/>}
+                {p.name}
+              </button>
+            })}
+          </div>
+        </div>
+
+        {active && <aside className="glass place-panel">
+          <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
+            <div>
+              <h3 style={{fontSize:22,fontWeight:600,letterSpacing:'-0.025em'}}>{active.name}</h3>
+              <p style={{fontSize:13,color:'var(--tx3)',marginTop:2}}>{active.city||'—'}</p>
+            </div>
+            <span className="badge b-green"><span className="dot dot-green"/>live</span>
+          </div>
+
+          <p style={{fontSize:11.5,color:'var(--tx3)',marginTop:8,display:'flex',alignItems:'center',gap:5}}>
+            <MapPin size={11}/>{active.lat.toFixed(4)}°, {active.lon.toFixed(4)}°
+          </p>
+
+          <div className="hr"/>
+
+          <div style={{display:'flex',flexDirection:'column',gap:2}}>
+            {/* "Your location" has no instruments — it reads from Open-Meteo. */}
+            {active.key===HERE_KEY&&here?([
+              {k:'Temperature',v:here.temperature,u:'°C',c:'#FF5C7A',i:<Thermometer size={15}/>},
+              {k:'Humidity',v:here.humidity,u:'%',c:'#6C8CFF',i:<Droplets size={15}/>},
+              {k:'Wind',v:here.windspeed,u:'km/h',c:'#B47CFF',i:<Wind size={15}/>},
+              {k:'UV Index',v:here.uv,u:'',c:'#E45FC4',i:<Activity size={15}/>},
+            ]).map(r=><div key={r.k} className="reading">
+              <span style={{display:'flex',alignItems:'center',gap:9}}>
+                <span style={{color:r.c,display:'flex'}}>{r.i}</span>
+                <span style={{fontSize:14,color:'var(--tx2)'}}>{r.k}</span>
+              </span>
+              <span className="val" style={{fontSize:21,fontWeight:600,color:'var(--tx1)'}}>
+                {r.v!=null?r.v.toFixed(1):'—'}
+                <span style={{fontSize:11,color:'var(--tx3)',marginLeft:3,fontWeight:400}}>{r.u}</span>
+              </span>
+            </div>):active.sensors.map(s=>{
+              const v=latestOf(s)?.value
+              const c=sColor(s.type)
+              return <div key={s.id} className="reading">
+                <span style={{display:'flex',alignItems:'center',gap:9}}>
+                  <span style={{color:c,display:'flex'}}>{sIcon(s.type)}</span>
+                  <span style={{fontSize:14,color:'var(--tx2)'}}>{sLabel(s.type)}</span>
+                </span>
+                <span className="val" style={{fontSize:21,fontWeight:600,color:'var(--tx1)'}}>
+                  {v!=null?v.toFixed(1):'—'}
+                  <span style={{fontSize:11,color:'var(--tx3)',marginLeft:3,fontWeight:400}}>{sUnit(s.type)}</span>
+                </span>
+              </div>
+            })}
+          </div>
+
+          {active.key===HERE_KEY
+            ? <p style={{fontSize:11,color:'var(--tx3)',marginTop:14}}>Live · Open-Meteo</p>
+            : latestOf(active.sensors[0]) && <p style={{fontSize:11,color:'var(--tx3)',marginTop:14}}>
+                Updated {format(new Date(latestOf(active.sensors[0])!.timestamp),'HH:mm')}
+              </p>}
+        </aside>}
+      </div>
+    </section>
+
+    {/* ─── Trends ─────────────────────────────────────────────────────────── */}
+    <section>
+      <div style={{marginBottom:14}}>
+        <h2 style={{fontSize:20,fontWeight:600,letterSpacing:'-0.025em'}}>Trends</h2>
+        <p style={{fontSize:13,color:'var(--tx3)',marginTop:2}}>Recent history per instrument</p>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(420px,1fr))',gap:16}}>
+        {byType.map(s=>{
+          const c=sColor(s.type)
+          const pts=s.data.map(d=>({t:format(new Date(d.timestamp),'HH:mm'),v:parseFloat(d.value.toFixed(2))}))
+          const last=pts.length?pts[pts.length-1].v:null
+          return <div key={s.type} className="card" style={{padding:'18px 18px 10px'}}>
+            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:10}}>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{color:c,display:'flex'}}>{sIcon(s.type)}</span>
+                <div>
+                  <p style={{fontSize:15,fontWeight:590,letterSpacing:'-0.015em'}}>{sLabel(s.type)}</p>
+                  <div style={{display:'flex',alignItems:'center',gap:4,marginTop:1}}>
+                    <MapPin size={10} style={{color:'var(--tx3)'}}/><span style={{fontSize:11.5,color:'var(--tx3)'}}>{s.location}</span>
+                  </div>
                 </div>
               </div>
+              {last!==null&&<p className="val" style={{fontSize:19,fontWeight:600}}>{last}<span style={{fontSize:11,color:'var(--tx3)',marginLeft:2}}>{sUnit(s.type)}</span></p>}
             </div>
-            {latest!==null&&<p className="val" style={{fontSize:19,fontWeight:600,color:'var(--tx1)'}}>{latest}<span style={{fontSize:11,color:'var(--tx3)',marginLeft:2}}>{sUnit(s.type)}</span></p>}
+            <ResponsiveContainer width="100%" height={110}>
+              <AreaChart data={pts} margin={{top:4,right:4,left:0,bottom:0}}>
+                <defs><linearGradient id={`g${s.type}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={c} stopOpacity={0.22}/><stop offset="100%" stopColor={c} stopOpacity={0.01}/></linearGradient></defs>
+                <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.07)" vertical={false}/>
+                <XAxis dataKey="t" tick={{fontSize:10,fill:'var(--tx3)'}} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={44}/>
+                <YAxis tick={{fontSize:10,fill:'var(--tx3)'}} width={30} tickLine={false} axisLine={false}/>
+                <Tooltip content={<TTip/>}/>
+                <Area type="monotone" dataKey="v" name={sLabel(s.type)} stroke={c} strokeWidth={2} fill={`url(#g${s.type})`} dot={false}/>
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
-          <ResponsiveContainer width="100%" height={110}>
-            <AreaChart data={pts} margin={{top:4,right:4,left:0,bottom:0}}>
-              <defs><linearGradient id={`g${s.type}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={c} stopOpacity={0.22}/><stop offset="100%" stopColor={c} stopOpacity={0.01}/></linearGradient></defs>
-              <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.07)" vertical={false}/>
-              {/* minTickGap stops the labels colliding into a grey smear */}
-              <XAxis dataKey="t" tick={{fontSize:10,fill:'var(--tx3)'}} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={44}/>
-              <YAxis tick={{fontSize:10,fill:'var(--tx3)'}} width={30} tickLine={false} axisLine={false}/>
-              <Tooltip content={<TTip/>}/>
-              <Area type="monotone" dataKey="v" name={sLabel(s.type)} stroke={c} strokeWidth={2} fill={`url(#g${s.type})`} dot={false}/>
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      })}
-    </div>
+        })}
+      </div>
+    </section>
   </div>
 }
+
 
 // ─── Sensors ──────────────────────────────────────────────────────────────────
 // ─── Sensors ──────────────────────────────────────────────────────────────────
@@ -870,6 +978,7 @@ function GroupsTab({groups,user,onRefresh}:{groups:Group[];user:User;onRefresh:(
           <span style={{fontSize:11.5,color:'var(--tx3)',display:'flex',alignItems:'center',gap:4}}><MessageSquare size={10}/>{g._count.messages}</span>
         </div>
         {isMem(g)?<button className="btn btn-green btn-sm" style={{width:'100%'}} onClick={()=>openChat(g)}><MessageSquare size={12}/>Open Chat</button>:<button className="btn btn-ghost btn-sm" style={{width:'100%'}} onClick={()=>join(g.id)}>Join Group</button>}
+        <div style={{marginTop:8}}><ShareButtons groupName={g.name} issue={g.issue} groupId={g.id}/></div>
       </div>)}
     </div>
 
@@ -1018,7 +1127,7 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
     <div className="noise"/><div className="glow-orb orb1"/><div className="glow-orb orb2"/><div className="glow-orb orb3"/>
 
     {/* Sidebar */}
-    <aside style={{width:sideOpen?220:58,flexShrink:0,position:'sticky',top:0,height:'100vh',background:'linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))',backdropFilter:'blur(34px) saturate(175%)',WebkitBackdropFilter:'blur(34px) saturate(175%)',borderRight:'1px solid rgba(255,255,255,0.08)',display:'flex',flexDirection:'column',zIndex:10,transition:'width .22s ease'}}>
+    <aside style={{width:sideOpen?220:58,flexShrink:0,position:'sticky',top:0,height:'100vh',background:'linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.006))',backdropFilter:'blur(44px) saturate(190%)',WebkitBackdropFilter:'blur(44px) saturate(190%)',borderRight:'1px solid rgba(255,255,255,0.055)',display:'flex',flexDirection:'column',zIndex:10,transition:'width .22s ease'}}>
       {/* Logo */}
       <div style={{padding:'18px 12px 16px',borderBottom:'1px solid var(--b1)'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
@@ -1056,7 +1165,7 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
     {/* Main */}
     <main style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',position:'relative',zIndex:1}}>
       {/* Header */}
-      <header style={{padding:'14px 26px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--b1)',background:'linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.015))',backdropFilter:'blur(34px) saturate(175%)',WebkitBackdropFilter:'blur(34px) saturate(175%)',flexShrink:0,position:'sticky',top:0,zIndex:50}}>
+      <header style={{padding:'14px 26px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--b1)',background:'linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.008))',backdropFilter:'blur(44px) saturate(190%)',WebkitBackdropFilter:'blur(44px) saturate(190%)',flexShrink:0,position:'sticky',top:0,zIndex:50}}>
         <div>
           <h1 style={{fontSize:15.5,fontWeight:700,fontFamily:'inherit'}}>{nav.find(n=>n.k===tab)?.l}</h1>
           <p className="val" style={{fontSize:11,color:'var(--tx3)',marginTop:1}}>{format(new Date(),'EEEE, MMMM d · HH:mm')}</p>

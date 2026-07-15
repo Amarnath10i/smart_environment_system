@@ -25,6 +25,7 @@
     "react-hook-form": "^7.71.2",
     "recharts": "^3.8.0",
     "simple-icons": "^16.26.0",
+    "three": "^0.185.1",
     "tsx": "^4.21.0",
     "zod": "^3.25.76"
   },
@@ -33,6 +34,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.185.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
