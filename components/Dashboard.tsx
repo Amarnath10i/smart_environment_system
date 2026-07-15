@@ -291,10 +291,23 @@ function AuthScreen({onAuth}:{onAuth:(u:User,t:string,msg?:string)=>void}) {
 }
 
 // ─── Overview ─────────────────────────────────────────────────────────────────
+/**
+ * Newest reading for a sensor.
+ *
+ * /api/sensors returns a series ordered oldest -> newest, so the newest is the
+ * last element. This code read data[0], which was the newest back when the
+ * endpoint returned a single row — after the endpoint started returning
+ * history, data[0] silently became the OLDEST reading, and the tiles showed a
+ * stale value that disagreed with the chart right beside them.
+ */
+const latestOf = (s:Sensor) => s.data.length?s.data[s.data.length-1]:undefined
+
 function Overview({sensors}:{sensors:Sensor[]}) {
-  // Deduplicate: one card per sensor type, latest reading only
+  // Deduplicate: one card per sensor type, keeping whichever has the most
+  // recent reading.
   const unique = sensors.reduce((acc,s)=>{
-    if(!acc[s.type]||new Date(s.data[0]?.timestamp||0)>new Date(acc[s.type].data[0]?.timestamp||0)) acc[s.type]=s
+    const prev=acc[s.type]
+    if(!prev||new Date(latestOf(s)?.timestamp||0)>new Date(latestOf(prev)?.timestamp||0)) acc[s.type]=s
     return acc
   },{} as Record<string,Sensor>)
 
@@ -305,7 +318,7 @@ function Overview({sensors}:{sensors:Sensor[]}) {
     {/* Stat row */}
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:12}}>
       {list.map(s=>{
-        const v=s.data[0]?.value
+        const v=latestOf(s)?.value
         const c=sColor(s.type)
         return <div key={s.type} className="card" style={{padding:'18px 20px',position:'relative',overflow:'hidden'}}>
           <div style={{position:'absolute',top:-12,right:-12,opacity:0.06,transform:'scale(3.2)',color:c}}>{sIcon(s.type)}</div>
@@ -661,7 +674,7 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
       <p className="sec" style={{marginBottom:14}}>Database Sensors</p>
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:13}}>
         {sensors.map(s=>{
-          const c=sColor(s.type); const v=s.data[0]?.value
+          const c=sColor(s.type); const v=latestOf(s)?.value
           return <div key={s.id} className="card" style={{padding:'18px 20px'}}>
             <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:14}}>
               <div style={{display:'flex',alignItems:'center',gap:10}}>
@@ -681,7 +694,7 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
             </div>
             <div className="hr"/>
             <p style={{fontSize:11,color:'var(--tx3)',fontFamily:'inherit'}}>
-              ID #{s.id} · Updated {s.data[0]?format(new Date(s.data[0].timestamp),'HH:mm'):'N/A'}
+              ID #{s.id} · Updated {latestOf(s)?format(new Date(latestOf(s)!.timestamp),'HH:mm'):'N/A'}
             </p>
           </div>
         })}
