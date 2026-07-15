@@ -30,10 +30,32 @@ export type GlobeMarker = {
  * zoom.earth runs on.
  */
 
-const BASE_ZOOM = 1.3
-const CLOSE_ZOOM = 4.2
+const BASE_ZOOM = 1.1
+/*
+ * Sizes the sphere so it covers rather more than half the page: MapLibre draws
+ * the globe with a radius of about 256*2^zoom/pi px, so on a ~1000px-tall page
+ * zoom 3.8 gives a radius of ~1150px — larger than the page is tall, which is
+ * what makes the limb read as a shallow arc instead of a small ball.
+ */
+const CLOSE_ZOOM = 3.8
 /** Tilt lifted from the Google Earth link used as the reference (51.9t). */
-const CLOSE_PITCH = 52
+const CLOSE_PITCH = 34
+
+/*
+ * Pushes the globe's centre down past the page's bottom-right corner, so Earth
+ * fills the lower right and the limb cuts the page on a diagonal with space and
+ * stars in the upper left — the framing in the reference.
+ *
+ * Padding, not CSS: it shifts where MapLibre puts the centre *within* the
+ * canvas, which keeps the whole canvas live for panning and keeps the selected
+ * place on-screen. Fractions of the container, so it holds at any window size.
+ */
+const FRAMING_PAD = { top: 0.62, left: 0.55 }
+
+function framingPadding(map: maplibregl.Map) {
+  const c = map.getContainer()
+  return { top: c.clientHeight * FRAMING_PAD.top, left: c.clientWidth * FRAMING_PAD.left, bottom: 0, right: 0 }
+}
 
 export function Globe({
   markers,
@@ -126,7 +148,12 @@ export function Globe({
             type: 'raster',
             source: 'detail',
             paint: {
-              'raster-opacity': ['interpolate', ['linear'], ['zoom'], 2.5, 0, 5, 1],
+              /*
+               * Fully faded in by zoom 3.4 — below the arrival zoom, so the
+               * framed view is pure Esri rather than a half-blend with the
+               * level-8 Blue Marble under it, which was what softened it.
+               */
+              'raster-opacity': ['interpolate', ['linear'], ['zoom'], 1.6, 0, 3.4, 1],
               'raster-fade-duration': 300,
             },
           },
@@ -152,7 +179,11 @@ export function Globe({
     // No MapLibre controls: they anchor to the canvas, whose corners now sit
     // off-screen under this framing. Zoom is scroll/pinch; the NASA and Esri
     // credits their licences require are rendered by the page instead.
-    map.on('style.load', () => map.setProjection({ type: 'globe' }))
+    map.on('style.load', () => {
+      map.setProjection({ type: 'globe' })
+      // Frame the opening view too, so it is composed before any fly-to lands.
+      map.setPadding(framingPadding(map))
+    })
 
     mapRef.current = map
     return () => {
@@ -197,6 +228,7 @@ export function Globe({
         center: [target.lon, target.lat],
         zoom: CLOSE_ZOOM,
         pitch: CLOSE_PITCH,
+        padding: framingPadding(map),
         duration: firstFly.current ? 2600 : 1400,
         essential: true, // still runs under prefers-reduced-motion, just as a jump
       })
@@ -208,18 +240,10 @@ export function Globe({
   }, [markers, selectedId])
 
   /*
-   * Framing: the globe's centre is parked on the page's bottom-right corner, so
-   * only its upper-left quadrant fills the view — the limb sweeps from the left
-   * edge up to the top-right, exactly as in the reference.
-   *
-   * MapLibre always centres the globe in its own canvas, so the canvas is made
-   * twice the page in each axis and pinned at top-left. Its centre then lands
-   * on the wrapper's bottom-right corner, and the wrapper clips the rest. The
-   * doubled canvas also renders the sphere at 2x, which is what fills the page.
+   * The canvas matches the page exactly. Framing is done in map space instead
+   * (see FRAMING_PAD and CLOSE_ZOOM), not by oversizing and offsetting this
+   * element — the globe's radius comes from the zoom, not the canvas size, so
+   * an oversized canvas only moves a same-sized sphere off-screen.
    */
-  return (
-    <div className={className} style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-      <div ref={mount} style={{ position: 'absolute', top: 0, left: 0, width: '200%', height: '200%' }} />
-    </div>
-  )
+  return <div ref={mount} className={className} style={{ width: '100%', height: '100%', overflow: 'hidden' }} />
 }
