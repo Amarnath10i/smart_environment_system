@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { PAYMENT_METHOD_IDS } from '@/lib/payments'
 
 /**
  * Identity fields (userId, creatorId) are deliberately absent from every
@@ -52,7 +53,9 @@ export const donationSchema = z.object({
     .number()
     .positive('Donation amount must be greater than zero')
     .max(1_000_000),
-  method: z.enum(['card', 'upi', 'netbanking', 'wallet']),
+  // Derived from lib/payments.ts rather than restated here: a hand-written
+  // enum drifted from the picker and rejected every real donation.
+  method: z.enum(PAYMENT_METHOD_IDS),
 })
 
 /** Join routes take only the target id — the joiner is the authenticated caller. */

@@ -18,12 +18,11 @@
   --brand-3: #3A2079;  /* violet   */
   --brand-4: #1B2A6B;  /* navy     */
   --brand-grad: linear-gradient(135deg, #9B1C31 0%, #6B1B54 38%, #3A2079 72%, #1B2A6B 100%);
-  /* Buttons run darker and red-weighted: crimson holds the first half of the
-     sweep and the violet end only anchors it, so the control reads deep red
-     rather than magenta. Separate from --brand-grad, which stays brighter for
-     the logo and wordmark. */
-  --btn-grad: linear-gradient(135deg, #5E0C1B 0%, #7A1228 34%, #5C1440 68%, #331A5C 100%);
-  --btn-grad-hover: linear-gradient(135deg, #6E0F21 0%, #8E1730 34%, #6B1A4C 68%, #3D2069 100%);
+  /* Buttons take the SHADES ramp directly: deep oxblood -> dark plum -> deep
+     navy, kept dark and saturated rather than lifted toward magenta. Separate
+     from --brand-grad, which stays brighter for the logo and wordmark. */
+  --btn-grad: linear-gradient(135deg, #6F0A14 0%, #5A0F2C 30%, #3A1046 64%, #171753 100%);
+  --btn-grad-hover: linear-gradient(135deg, #86101C 0%, #6D1236 30%, #481457 64%, #1E1E6B 100%);
 
   /* Surfaces: near-black with a cool cast so it sits under the navy end */
   --bg: #08080B;
@@ -244,26 +243,28 @@ body::before {
  * brightening the fill.
  */
 .btn-green {
+  /* Glaze kept light-handed: a heavier white wash was lifting the ramp toward
+     magenta and undoing the depth. Only the top 40% catches any light. */
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 46%, rgba(0,0,0,0.18) 100%),
+    linear-gradient(180deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 40%, rgba(0,0,0,0.26) 100%),
     var(--btn-grad);
-  border-color: rgba(255,255,255,0.14);
-  color: #F7F2F3; font-size: 14px; padding: 10px 22px;
+  border-color: rgba(255,255,255,0.10);
+  color: #F2EAEC; font-size: 14px; padding: 10px 22px;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.26),
-    inset 0 -1px 0 rgba(0,0,0,0.36),
-    0 4px 18px rgba(94,12,27,0.5);
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    inset 0 -1px 0 rgba(0,0,0,0.5),
+    0 4px 18px rgba(60,8,18,0.55);
 }
 .btn-green:hover {
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.05) 46%, rgba(0,0,0,0.16) 100%),
+    linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.03) 40%, rgba(0,0,0,0.22) 100%),
     var(--btn-grad-hover);
-  border-color: rgba(255,255,255,0.22);
+  border-color: rgba(255,255,255,0.16);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.32),
-    inset 0 -1px 0 rgba(0,0,0,0.36),
-    0 6px 26px rgba(122,18,40,0.55),
-    0 0 34px rgba(155,28,49,0.32);
+    inset 0 1px 0 rgba(255,255,255,0.24),
+    inset 0 -1px 0 rgba(0,0,0,0.5),
+    0 6px 26px rgba(90,12,28,0.6),
+    0 0 32px rgba(120,16,32,0.3);
 }
 .btn-green:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
 
@@ -298,8 +299,16 @@ body::before {
   display: flex; flex-direction: column; align-items: center; gap: 7px;
   cursor: pointer; transition: all 0.2s; color: var(--tx1);
 }
-.btn-pay:hover { border-color: var(--ac); background: var(--ac-tint); }
-.btn-pay.selected { border-color: var(--ac); background: var(--ac-tint); box-shadow: 0 0 0 3px rgba(123,92,255,0.18); }
+/* Hover must not borrow the selected colour: they were both accent violet, so
+   a row the cursor merely passed over looked exactly as chosen as the real
+   selection. Hover is a neutral lift; selection alone owns the accent. */
+.btn-pay:hover { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.06); }
+.btn-pay.selected,
+.btn-pay.selected:hover {
+  border-color: var(--ac);
+  background: var(--ac-tint);
+  box-shadow: 0 0 0 3px rgba(123,92,255,0.18);
+}
 
 .btn-xs { font-size: 12px; padding: 5px 13px; }
 .btn-sm { font-size: 13px; padding: 7px 16px; }
@@ -358,14 +367,67 @@ textarea.inp { resize: vertical; min-height: 80px; line-height: 1.5; }
   transition: background 0.18s ease, color 0.18s ease;
 }
 .nav-link:hover { background: rgba(255,255,255,0.06); color: var(--tx1); }
+/* Selected nav: clear white glass rather than a violet fill — the selection
+   reads as a lit pane over the page, not a coloured block stamped on it. */
 .nav-link.on {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.03)),
-    rgba(123,92,255,0.20);
-  color: var(--tx1); font-weight: 510;
-  border-color: rgba(123,92,255,0.36);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 12px rgba(123,92,255,0.22);
+  background: linear-gradient(180deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.04) 100%);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  color: #FFFFFF; font-weight: 510;
+  border-color: rgba(255,255,255,0.14);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.20), 0 2px 10px rgba(0,0,0,0.35);
 }
+
+/*
+ * Sliding segmented control.
+ *
+ * A single thumb translates between the options instead of each side toggling
+ * its own background, so the selection has continuity — the eye follows one
+ * object moving rather than two things blinking.
+ */
+.seg {
+  position: relative;
+  display: flex;
+  padding: 4px;
+  margin-bottom: 24px;
+  border-radius: 980px;
+  background: rgba(0,0,0,0.30);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.45);
+}
+.seg-thumb {
+  position: absolute;
+  top: 4px; left: 4px;
+  /* Exactly one option wide, so translateX(100%) lands precisely on the second. */
+  width: calc(50% - 4px);
+  height: calc(100% - 8px);
+  border-radius: 980px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.05) 100%);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 2px 10px rgba(0,0,0,0.4);
+  transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+}
+.seg-btn {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  padding: 9px 0;
+  border: none;
+  background: transparent;
+  border-radius: 980px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
+  color: var(--tx3);
+  transition: color 0.22s ease, font-weight 0.22s ease;
+}
+.seg-btn:hover { color: var(--tx2); }
+.seg-btn.on { color: #FFFFFF; font-weight: 590; }
 
 .lbl { font-size: 12px; color: var(--tx2); text-transform: none; font-weight: 500; margin-bottom: 6px; display: block; }
 

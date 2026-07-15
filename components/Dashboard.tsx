@@ -6,6 +6,8 @@ import { format } from 'date-fns'
 import { apiGet, apiPost, ApiError, type Page } from '@/lib/api-client'
 import { useEventStream } from '@/lib/use-event-stream'
 import { Logo } from '@/components/Logo'
+import { PaymentIcon } from '@/components/PaymentIcons'
+import { CURRENCIES, BANKS, currency, methodsFor, formatMoney, toINR, methodName } from '@/lib/payments'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface User { id:number; email:string; name:string|null; role:string; isVerified?:boolean }
@@ -45,35 +47,56 @@ function Toast({msg,type,onClose}:{msg:string;type:'ok'|'err'|'info';onClose:()=
 }
 
 // ─── Payment Modal ────────────────────────────────────────────────────────────
-const UPI_APPS = [
-  {id:'gpay',name:'Google Pay',emoji:'🟡',color:'#4285F4'},
-  {id:'phonepe',name:'PhonePe',emoji:'💜',color:'#5f259f'},
-  {id:'paytm',name:'Paytm',emoji:'🔵',color:'#00B9F1'},
-  {id:'bhim',name:'BHIM UPI',emoji:'🇮🇳',color:'#FF5722'},
-  {id:'amazonpay',name:'Amazon Pay',emoji:'🟠',color:'#FF9900'},
-  {id:'paypal',name:'PayPal',emoji:'🔷',color:'#003087'},
-]
 
 function PaymentModal({fundraiser,user,onClose,onSuccess}:{fundraiser:Fundraiser;user:User;onClose:()=>void;onSuccess:(amt:number,method:string)=>void}) {
   const [step,setStep]=useState<'amount'|'method'|'processing'|'done'>('amount')
+  const [cur,setCur]=useState<string>('INR')
   const [amount,setAmount]=useState('')
   const [method,setMethod]=useState('')
   const [upiId,setUpiId]=useState('')
+  const [bank,setBank]=useState('')
+  const [card,setCard]=useState({num:'',exp:'',cvv:'',name:''})
+  const [err,setErr]=useState('')
 
-  const quickAmts=[100,500,1000,2500,5000]
+  const c=currency(cur)
+  const available=methodsFor(cur)
+  const quickAmts=cur==='INR'?[100,500,1000,2500,5000]:[5,10,25,50,100]
+  const amt=parseFloat(amount||'0')
+  const inr=toINR(amt,cur)
+
+  // Switching currency can strip the chosen method (UPI cannot settle USD).
+  useEffect(()=>{ if(method&&!available.some(m=>m.id===method)) setMethod('') },[cur])
+
+  const chosen=available.find(m=>m.id===method)
+  // Each rail has its own required detail, exactly as a real checkout gates it.
+  const ready=!!chosen&&(
+    chosen.kind==='netbanking' ? !!bank :
+    chosen.kind==='card' ? card.num.replace(/\s/g,'').length>=15&&/^\d{2}\/\d{2}$/.test(card.exp)&&card.cvv.length>=3 :
+    true)
 
   const pay = async () => {
-    if(!amount||!method) return
-    setStep('processing')
-    // Simulate processing delay
+    if(!amt||!chosen||!ready) return
+    setErr(''); setStep('processing')
+    // Simulated authorisation. A real integration hands off to the provider's
+    // SDK here and confirms server-side against their webhook.
     await new Promise(r=>setTimeout(r,2200))
     try {
-      // No userId: the server takes the donor from the bearer token.
-      await apiPost('/api/fundraisers/donate',{fundraiserId:fundraiser.id,amount:parseFloat(amount),method})
+      // Card details are deliberately NOT sent: nothing here is PCI compliant,
+      // and the server has no business seeing a PAN. Only the rail is recorded.
+      // Amount is converted to INR because goals/totals are denominated in INR.
+      await apiPost('/api/fundraisers/donate',{fundraiserId:fundraiser.id,amount:inr,method})
       setStep('done')
-      setTimeout(()=>{ onSuccess(parseFloat(amount),method); onClose() },1800)
-    } catch { setStep('method') }
+      setTimeout(()=>{ onSuccess(inr,method); onClose() },1800)
+    } catch(e) {
+      // The old code swallowed this and silently bounced back a step, which is
+      // how a rejected method stayed invisible.
+      setErr(e instanceof ApiError&&e.fields?Object.values(e.fields)[0]:e instanceof Error?e.message:'Payment failed')
+      setStep('method')
+    }
   }
+
+  const fmtCard=(v:string)=>v.replace(/\D/g,'').slice(0,16).replace(/(.{4})/g,'$1 ').trim()
+  const fmtExp=(v:string)=>{const d=v.replace(/\D/g,'').slice(0,4);return d.length>2?`${d.slice(0,2)}/${d.slice(2)}`:d}
 
   return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
     <div className="modal" style={{maxWidth:460}}>
@@ -88,43 +111,98 @@ function PaymentModal({fundraiser,user,onClose,onSuccess}:{fundraiser:Fundraiser
 
       <div style={{padding:'20px',overflowY:'auto',flex:1}}>
         {step==='amount' && <>
+          <p className="lbl">Currency</p>
+          <div style={{display:'flex',gap:6,marginBottom:16}}>
+            {CURRENCIES.map(x=><button key={x.code} onClick={()=>{setCur(x.code);setAmount('')}}
+              style={{flex:1,padding:'8px 0',borderRadius:9,cursor:'pointer',fontFamily:'inherit',fontSize:12.5,fontWeight:cur===x.code?590:450,transition:'all .15s',
+              border:`1px solid ${cur===x.code?'rgba(255,255,255,0.16)':'rgba(255,255,255,0.07)'}`,
+              background:cur===x.code?'linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.04))':'transparent',
+              color:cur===x.code?'#FFFFFF':'var(--tx3)'}}>{x.symbol} {x.code}</button>)}
+          </div>
           <p className="lbl">Select Amount</p>
           <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8,marginBottom:14}}>
             {quickAmts.map(a=><button key={a} onClick={()=>setAmount(String(a))} className="btn-pay btn-xs"
-              style={{padding:'10px 4px',fontSize:12,borderRadius:10,textAlign:'center',cursor:'pointer',border:`1px solid ${amount===String(a)?'rgba(123,92,255,0.5)':'rgba(123,92,255,0.12)'}`,background:amount===String(a)?'rgba(123,92,255,0.1)':'rgba(255,255,255,0.045)',color:amount===String(a)?'#7B5CFF':'var(--tx2)',transition:'all .15s'}}>
-              ₹{a}
+              style={{padding:'10px 4px',fontSize:12,borderRadius:10,textAlign:'center',cursor:'pointer',border:`1px solid ${amount===String(a)?'rgba(123,92,255,0.5)':'rgba(255,255,255,0.08)'}`,background:amount===String(a)?'rgba(123,92,255,0.12)':'rgba(255,255,255,0.035)',color:amount===String(a)?'#FFFFFF':'var(--tx2)',transition:'all .15s'}}>
+              {c.symbol}{a}
             </button>)}
           </div>
           <p className="lbl">Or enter custom</p>
-          <div style={{position:'relative',marginBottom:20}}>
-            <span style={{position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',fontSize:16,color:'rgba(123,92,255,0.7)'}}>₹</span>
+          <div style={{position:'relative',marginBottom:14}}>
+            <span style={{position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',fontSize:16,color:'var(--tx3)'}}>{c.symbol}</span>
             <input className="inp" style={{paddingLeft:30}} type="number" placeholder="Enter amount" value={amount} onChange={e=>setAmount(e.target.value)} />
           </div>
-          <button className="btn btn-green" style={{width:'100%',padding:'12px'}} onClick={()=>amount&&parseFloat(amount)>0&&setStep('method')}>
+          {cur!=='INR'&&amt>0&&<p style={{fontSize:11.5,color:'var(--tx3)',marginBottom:14,display:'flex',alignItems:'center',gap:5}}>
+            <Globe size={11}/> Charged as ≈ ₹{inr.toLocaleString('en-IN')} · indicative rate
+          </p>}
+          <button className="btn btn-green" style={{width:'100%',padding:'12px'}} onClick={()=>amt>0&&setStep('method')}>
             Continue <ChevronRight size={15}/>
           </button>
         </>}
 
         {step==='method' && <>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
             <p className="lbl" style={{marginBottom:0}}>Choose Payment</p>
-            <span style={{fontSize:17,color:'#30D158'}}>₹{parseFloat(amount).toLocaleString('en-IN')}</span>
+            <span className="val" style={{fontSize:17,fontWeight:600}}>{formatMoney(amt,cur)}</span>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:18}}>
-            {UPI_APPS.map(app=><button key={app.id} onClick={()=>setMethod(app.id)} className="btn-pay"
-              style={{borderColor:method===app.id?'rgba(123,92,255,0.5)':'rgba(123,92,255,0.1)',background:method===app.id?'rgba(123,92,255,0.08)':'rgba(255,255,255,0.035)'}}>
-              <span style={{fontSize:24}}>{app.emoji}</span>
-              <span style={{fontSize:11,color:'var(--tx2)',fontWeight:500}}>{app.name}</span>
-            </button>)}
-          </div>
-          {method && <>
+
+          {(['upi','wallet','gateway','card','netbanking'] as const).map(kind=>{
+            const group=available.filter(m=>m.kind===kind)
+            if(!group.length) return null
+            const label={upi:'UPI Apps',wallet:'Wallets',gateway:'Payment Gateway',card:'Cards',netbanking:'Net Banking'}[kind]
+            return <div key={kind} style={{marginBottom:14}}>
+              <p style={{fontSize:11,color:'var(--tx3)',fontWeight:500,marginBottom:7}}>{label}</p>
+              <div style={{display:'grid',gridTemplateColumns:group.length>2?'repeat(3,1fr)':'1fr',gap:8}}>
+                {group.map(m=><button key={m.id} onClick={()=>{setMethod(m.id);setErr('')}} className={`btn-pay${method===m.id?' selected':''}`}
+                  style={{flexDirection:group.length>2?'column':'row',justifyContent:group.length>2?'center':'flex-start',gap:group.length>2?7:10,padding:group.length>2?'12px 6px':'12px 14px'}}>
+                  <PaymentIcon id={m.id} size={group.length>2?26:24}/>
+                  <span style={{display:'flex',flexDirection:'column',alignItems:group.length>2?'center':'flex-start',gap:1}}>
+                    <span style={{fontSize:11.5,color:'var(--tx1)',fontWeight:500}}>{m.name}</span>
+                    {m.hint&&group.length<=2&&<span style={{fontSize:10.5,color:'var(--tx3)'}}>{m.hint}</span>}
+                  </span>
+                </button>)}
+              </div>
+            </div>
+          })}
+
+          {chosen?.kind==='upi'&&<>
             <p className="lbl">UPI ID / Mobile (optional)</p>
-            <input className="inp" placeholder="yourname@upi or 9XXXXXXXXX" value={upiId} onChange={e=>setUpiId(e.target.value)} style={{marginBottom:16}}/>
+            <input className="inp" placeholder="yourname@upi or 9XXXXXXXXX" value={upiId} onChange={e=>setUpiId(e.target.value)} style={{marginBottom:14}}/>
           </>}
+
+          {chosen?.kind==='netbanking'&&<>
+            <p className="lbl">Select your bank</p>
+            <select className="inp" value={bank} onChange={e=>setBank(e.target.value)} style={{marginBottom:14}}>
+              <option value="">Choose a bank…</option>
+              {BANKS.map(b=><option key={b} value={b}>{b}</option>)}
+            </select>
+          </>}
+
+          {chosen?.kind==='card'&&<div style={{marginBottom:14,display:'flex',flexDirection:'column',gap:9}}>
+            <div>
+              <p className="lbl">Card number</p>
+              <input className="inp" inputMode="numeric" autoComplete="off" placeholder="1234 5678 9012 3456" value={card.num} onChange={e=>setCard({...card,num:fmtCard(e.target.value)})}/>
+            </div>
+            <div style={{display:'flex',gap:9}}>
+              <div style={{flex:1}}>
+                <p className="lbl">Expiry</p>
+                <input className="inp" inputMode="numeric" autoComplete="off" placeholder="MM/YY" value={card.exp} onChange={e=>setCard({...card,exp:fmtExp(e.target.value)})}/>
+              </div>
+              <div style={{flex:1}}>
+                <p className="lbl">CVV</p>
+                <input className="inp" inputMode="numeric" autoComplete="off" type="password" placeholder="•••" maxLength={4} value={card.cvv} onChange={e=>setCard({...card,cvv:e.target.value.replace(/\D/g,'')})}/>
+              </div>
+            </div>
+            <p style={{fontSize:10.5,color:'var(--tx3)',display:'flex',alignItems:'center',gap:5}}>
+              <Lock size={10}/> Demo only — card details stay in your browser and are never sent.
+            </p>
+          </div>}
+
+          {err&&<p style={{color:'#FF453A',fontSize:12,marginBottom:12}}>{err}</p>}
+
           <div style={{display:'flex',gap:10}}>
             <button className="btn btn-ghost" onClick={()=>setStep('amount')} style={{padding:'11px 16px'}}>Back</button>
-            <button className="btn btn-green" style={{flex:1,padding:'12px'}} onClick={pay} disabled={!method}>
-              Pay ₹{parseFloat(amount||'0').toLocaleString('en-IN')}
+            <button className="btn btn-green" style={{flex:1,padding:'12px'}} onClick={pay} disabled={!ready}>
+              Pay {formatMoney(amt,cur)}
             </button>
           </div>
         </>}
@@ -140,7 +218,7 @@ function PaymentModal({fundraiser,user,onClose,onSuccess}:{fundraiser:Fundraiser
             <CheckCircle size={28} color="#30D158"/>
           </div>
           <p style={{fontSize:16,fontWeight:700,color:'#30D158'}}>Payment Successful!</p>
-          <p style={{fontSize:13,color:'var(--tx2)',marginTop:6}}>₹{parseFloat(amount).toLocaleString('en-IN')} donated via {UPI_APPS.find(a=>a.id===method)?.name}</p>
+          <p style={{fontSize:13,color:'var(--tx2)',marginTop:6}}>₹{parseFloat(amount).toLocaleString('en-IN')} donated via {methodName(method)}</p>
         </div>}
       </div>
     </div>
@@ -182,10 +260,12 @@ function AuthScreen({onAuth}:{onAuth:(u:User,t:string,msg?:string)=>void}) {
 
       <div className="card glass-ring" style={{padding:'28px 32px',borderRadius:22}}>
         {/* Mode toggle */}
-        {/* Segmented control: the selected side is a lifted light pill with
-            white text. Violet-on-navy was both off-palette and low contrast. */}
-        <div style={{display:'flex',background:'rgba(0,0,0,0.4)',borderRadius:11,padding:4,marginBottom:24,border:'1px solid rgba(255,255,255,0.06)'}}>
-          {(['login','register'] as const).map(m=><button key={m} onClick={()=>{setMode(m);setError('');setInfo('')}} style={{flex:1,padding:'9px 0',borderRadius:8,border:'1px solid '+(mode===m?'rgba(255,255,255,0.14)':'transparent'),cursor:'pointer',fontFamily:'inherit',fontSize:13.5,fontWeight:mode===m?590:450,transition:'all .18s',background:mode===m?'linear-gradient(180deg,rgba(255,255,255,0.18),rgba(255,255,255,0.07))':'transparent',color:mode===m?'#FFFFFF':'var(--tx3)',letterSpacing:'-0.01em',boxShadow:mode===m?'inset 0 1px 0 rgba(255,255,255,0.22), 0 2px 8px rgba(0,0,0,0.4)':'none'}}>
+        {/* Sliding segmented control: one glass pill travels between the two
+            options rather than each side switching its own background on and
+            off. Fully rounded so it stops reading as a box. */}
+        <div className="seg">
+          <span className="seg-thumb" style={{transform:mode==='register'?'translateX(100%)':'translateX(0)'}} aria-hidden="true"/>
+          {(['login','register'] as const).map(m=><button key={m} onClick={()=>{setMode(m);setError('');setInfo('')}} className={`seg-btn${mode===m?' on':''}`}>
             {m==='login'?'Sign In':'Register'}
           </button>)}
         </div>
@@ -815,7 +895,7 @@ function FundraisersTab({fundraisers,user,onRefresh,onToast}:{fundraisers:Fundra
 
   const handleDonation=(f:Fundraiser,amt:number,method:string)=>{
     setLocalFunds(prev=>prev.map(x=>x.id===f.id?{...x,raised:x.raised+amt}:x))
-    onToast(`₹${amt.toLocaleString('en-IN')} donated via ${UPI_APPS.find(a=>a.id===method)?.name||method}!`,'ok')
+    onToast(`₹${amt.toLocaleString('en-IN')} donated via ${methodName(method)}!`,'ok')
     onRefresh()
   }
 
