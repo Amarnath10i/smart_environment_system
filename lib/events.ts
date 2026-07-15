@@ -14,6 +14,11 @@ export type AppEvent =
   | { type: 'donation:new'; audience: 'public'; payload: { fundraiserId: number; amount: number; raised: number; goal: number } }
   | { type: 'campaign:new'; audience: 'public'; payload: { id: number; title: string } }
   | { type: 'group:new'; audience: 'public'; payload: { id: number; name: string } }
+  | { type: 'fundraiser:new'; audience: 'public'; payload: { id: number; cause: string } }
+  // Joins change the member/participant counts every client renders, so they
+  // broadcast too -- otherwise a join was invisible until the 5-minute poll.
+  | { type: 'campaign:join'; audience: 'public'; payload: { id: number } }
+  | { type: 'group:join'; audience: 'public'; payload: { id: number } }
   | {
       type: 'message:new'
       // Group chat is members-only, so these carry the group they belong to

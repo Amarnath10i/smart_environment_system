@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/api-auth'
 import { fundraiserSchema, paginationSchema, parseBody, parseQuery } from '@/lib/validation'
+import { publish } from '@/lib/events'
 
 export async function GET(request: NextRequest) {
   const query = parseQuery(request.url, paginationSchema)
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
       data: { ...parsed.data, creatorId: auth.user.id },
       include: { creator: { select: { id: true, name: true } } },
     })
+    publish({ type: 'fundraiser:new', audience: 'public', payload: { id: fundraiser.id, cause: fundraiser.cause } })
     return NextResponse.json(fundraiser, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Failed to create fundraiser' }, { status: 500 })

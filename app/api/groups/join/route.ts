@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/api-auth'
 import { joinGroupSchema, parseBody } from '@/lib/validation'
+import { publish } from '@/lib/events'
 
 /**
  * Joins the *caller* to a group. The body carries only the group id: taking a
@@ -21,6 +22,7 @@ export async function POST(request: NextRequest) {
       data: { members: { connect: { id: auth.user.id } } },
       include: { _count: { select: { members: true } } },
     })
+    publish({ type: 'group:join', audience: 'public', payload: { id: group.id } })
     return NextResponse.json(group)
   } catch (error) {
     // P2025: the group id does not exist.

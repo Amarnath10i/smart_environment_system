@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Thermometer, Droplets, Wind, Activity, Radio, Newspaper, Users, Megaphone, HeartHandshake, MessageSquare, MapPin, Navigation, RefreshCw, Plus, X, Send, AlertTriangle, Globe, UserCircle, Lock, Mail, LogOut, LayoutDashboard, BarChart3, CheckCircle, Smartphone, CreditCard, Wallet, ChevronRight, Bell, Zap } from 'lucide-react'
 import { format } from 'date-fns'
@@ -16,7 +17,9 @@ import { CURRENCIES, BANKS, currency, methodsFor, formatMoney, toINR, methodName
 interface User { id:number; email:string; name:string|null; role:string; isVerified?:boolean }
 interface Sensor { id:number; type:string; location:string; lat:number|null; lon:number|null; status:string; data:{value:number;timestamp:string}[] }
 interface SensorData { id:number; sensorId:number; value:number; timestamp:string; sensor:{type:string;location:string} }
-interface NewsItem { id:number; title:string; content:string; source:string; createdAt:string }
+/** Matches lib/news-feeds.ts. `url` is '' for stored fallback rows, which have no link. */
+interface NewsItem { id:string; title:string; summary:string; url:string; source:string; author:string|null; publishedAt:string|null; category:string|null }
+interface NewsResponse { articles:NewsItem[]; live:boolean; fetchedAt:string }
 // Listings identify people by id and name only -- the API no longer returns
 // other users' email addresses to unauthenticated callers.
 interface Person { id:number; name:string|null }
@@ -814,18 +817,125 @@ function Analytics({sensors}:{sensors:Sensor[]}) {
 }
 
 // ─── News ─────────────────────────────────────────────────────────────────────
-function NewsTab({news}:{news:NewsItem[]}) {
+/** "3h ago" reads better than a timestamp for a live feed. */
+function ago(iso:string|null):string {
+  if(!iso) return ''
+  const s=(Date.now()-Date.parse(iso))/1000
+  if(isNaN(s)) return ''
+  if(s<60) return 'just now'
+  if(s<3600) return `${Math.floor(s/60)}m ago`
+  if(s<86400) return `${Math.floor(s/3600)}h ago`
+  if(s<604800) return `${Math.floor(s/86400)}d ago`
+  return format(new Date(iso),'MMM d, yyyy')
+}
+
+function NewsTab({news,live,fetchedAt}:{news:NewsItem[];live:boolean;fetchedAt:string|null}) {
+  // The article opened in the reader; null means the list.
+  const [open,setOpen]=useState<NewsItem|null>(null)
+  const [source,setSource]=useState<string|null>(null)
+  // createPortal needs a real document, which the server render has not got.
+  const [mounted,setMounted]=useState(false)
+  useEffect(()=>setMounted(true),[])
+
+  // Escape closes the reader, as a dialog should.
+  useEffect(()=>{
+    if(!open) return
+    const onKey=(e:KeyboardEvent)=>{ if(e.key==='Escape') setOpen(null) }
+    window.addEventListener('keydown',onKey)
+    return ()=>window.removeEventListener('keydown',onKey)
+  },[open])
+
+  const sources=[...new Set(news.map(n=>n.source))]
+  const shown=source?news.filter(n=>n.source===source):news
+
   return <div className="anim-up" style={{display:'flex',flexDirection:'column',gap:13}}>
-    <p className="sec">Environmental News</p>
-    {!news.length&&<p style={{color:'var(--tx3)',textAlign:'center',padding:'50px 0'}}>No articles yet.</p>}
-    {news.map((n,i)=><div key={n.id} className="card" style={{padding:'20px 22px',animationDelay:`${i*.07}s`}}>
-      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:10}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+      <div style={{display:'flex',alignItems:'center',gap:10}}>
+        <p className="sec" style={{margin:0}}>Environmental News</p>
+        {/* Says plainly whether these are live articles or the stored fallback,
+            so a reader is never misled about how current the page is. */}
+        {live
+          ? <span className="badge b-green"><span className="dot dot-green"/>live</span>
+          : <span className="badge b-red">offline · stored</span>}
+      </div>
+      {/* No Refresh button here: the page header already has one, and on this
+          tab it force-refetches the feeds. A second one was pure duplication. */}
+      {fetchedAt&&<span className="val" style={{fontSize:10.5,color:'var(--tx3)'}}>updated {ago(fetchedAt)}</span>}
+    </div>
+
+    {/* Filter by publisher. */}
+    {sources.length>1&&<div style={{display:'flex',gap:7,flexWrap:'wrap'}}>
+      <button className={`chip${source===null?' on':''}`} onClick={()=>setSource(null)}>All ({news.length})</button>
+      {sources.map(s=><button key={s} className={`chip${source===s?' on':''}`} onClick={()=>setSource(s)}>
+        {s} ({news.filter(n=>n.source===s).length})
+      </button>)}
+    </div>}
+
+    {!shown.length&&<p style={{color:'var(--tx3)',textAlign:'center',padding:'50px 0'}}>No articles yet.</p>}
+
+    {shown.map((n,i)=><div key={n.id} className="card" style={{padding:'20px 22px',animationDelay:`${Math.min(i,8)*.05}s`}}>
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:8}}>
         <h3 style={{fontSize:15,fontWeight:700,lineHeight:1.4,fontFamily:'inherit'}}>{n.title}</h3>
         <span className="tag" style={{flexShrink:0}}><Globe size={10}/>{n.source}</span>
       </div>
-      <p style={{fontSize:13.5,color:'var(--tx2)',lineHeight:1.65,marginBottom:12}}>{n.content}</p>
-      <p className="val" style={{fontSize:11,color:'var(--tx3)'}}>{format(new Date(n.createdAt),'MMM d, yyyy')}</p>
+
+      {/* Byline: who published it, who wrote it, when. */}
+      <p style={{fontSize:11.5,color:'var(--tx3)',marginBottom:10,display:'flex',gap:7,flexWrap:'wrap',alignItems:'center'}}>
+        <span>{n.source}</span>
+        {n.author&&<><span aria-hidden="true">·</span><span>By {n.author}</span></>}
+        {n.publishedAt&&<><span aria-hidden="true">·</span><span className="val">{ago(n.publishedAt)}</span></>}
+        {n.category&&<><span aria-hidden="true">·</span><span>{n.category}</span></>}
+      </p>
+
+      <p style={{fontSize:13.5,color:'var(--tx2)',lineHeight:1.65,marginBottom:12,
+        display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{n.summary}</p>
+
+      <button className="btn btn-ghost btn-xs" onClick={()=>setOpen(n)}
+        style={{display:'inline-flex',alignItems:'center',gap:5}}>
+        See more<ChevronRight size={12}/>
+      </button>
     </div>)}
+
+    {/* Reader. RSS carries a summary, not the body, so the full text lives on the
+        publisher's site -- this shows everything the feed gives and links out for
+        the rest, rather than pretending to have the article. */}
+    {/*
+      * Portalled to <body> on purpose.
+      *
+      * The tab's .anim-up wrapper keeps a transform from its slideUp animation,
+      * and a transformed ancestor becomes the containing block for
+      * position:fixed. Rendered in place, this overlay anchored to that wrapper
+      * instead of the viewport -- with 139 articles the wrapper is ~13,000px
+      * tall, so the reader opened far below the fold while the backdrop still
+      * dimmed the screen. The portal takes it out of that subtree entirely.
+      */}
+    {open&&mounted&&createPortal(
+      <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)setOpen(null)}}>
+      <div className="modal" style={{padding:'22px 24px',overflowY:'auto'}} role="dialog" aria-modal="true" aria-label={open.title}>
+        <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:12}}>
+          <span className="tag"><Globe size={10}/>{open.source}</span>
+          <button className="btn btn-ghost btn-xs" onClick={()=>setOpen(null)} aria-label="Close"><X size={14}/></button>
+        </div>
+
+        <h2 style={{fontSize:20,fontWeight:700,lineHeight:1.3,marginBottom:10}}>{open.title}</h2>
+
+        <div style={{fontSize:12,color:'var(--tx3)',marginBottom:16,lineHeight:1.9}}>
+          <p>Published by <strong style={{color:'var(--tx2)'}}>{open.source}</strong></p>
+          {open.author&&<p>Written by <strong style={{color:'var(--tx2)'}}>{open.author}</strong></p>}
+          {open.publishedAt&&<p className="val">{format(new Date(open.publishedAt),'EEEE, MMMM d, yyyy · HH:mm')} ({ago(open.publishedAt)})</p>}
+          {open.category&&<p>Section: {open.category}</p>}
+        </div>
+
+        <p style={{fontSize:14,color:'var(--tx2)',lineHeight:1.75,marginBottom:18}}>{open.summary}</p>
+
+        {open.url
+          ? <a className="btn btn-green btn-sm" href={open.url} target="_blank" rel="noopener noreferrer"
+              style={{display:'inline-flex',alignItems:'center',gap:6,textDecoration:'none'}}>
+              Read full article on {open.source}<ChevronRight size={13}/>
+            </a>
+          : <p style={{fontSize:11.5,color:'var(--tx3)'}}>No link available for this stored article.</p>}
+      </div>
+    </div>, document.body)}
   </div>
 }
 
@@ -1016,21 +1126,24 @@ function FundraisersTab({fundraisers,user,onRefresh,onToast}:{fundraisers:Fundra
 function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
   const [tab,setTab]=useState<Tab>('overview')
   const [sensors,setSensors]=useState<Sensor[]>([]); const [news,setNews]=useState<NewsItem[]>([]); const [campaigns,setCampaigns]=useState<Campaign[]>([]); const [groups,setGroups]=useState<Group[]>([]); const [fundraisers,setFundraisers]=useState<Fundraiser[]>([]); const [refreshing,setRefreshing]=useState(false)
+  const [newsLive,setNewsLive]=useState(false); const [newsFetchedAt,setNewsFetchedAt]=useState<string|null>(null)
   const [toast,setToast]=useState<{msg:string;type:'ok'|'err'|'info'}|null>(null)
   const [sideOpen,setSideOpen]=useState(true)
 
-  const load=useCallback(async()=>{
+  const load=useCallback(async(freshNews=false)=>{
     setRefreshing(true)
     try{
-      // sensors/news return plain arrays; the community lists are paginated.
+      // sensors returns a plain array; news is wrapped so it can report whether
+      // it is live; the community lists are paginated.
       const [s,n,c,g,f]=await Promise.all([
         apiGet<Sensor[]>('/api/sensors'),
-        apiGet<NewsItem[]>('/api/news'),
+        apiGet<NewsResponse>(`/api/news${freshNews?'?refresh=1':''}`),
         apiGet<Page<Campaign>>('/api/campaigns?limit=50'),
         apiGet<Page<Group>>('/api/groups?limit=50'),
         apiGet<Page<Fundraiser>>('/api/fundraisers?limit=50'),
       ])
-      setSensors(s); setNews(n); setCampaigns(c.items); setGroups(g.items); setFundraisers(f.items)
+      setSensors(s); setNews(n.articles); setNewsLive(n.live); setNewsFetchedAt(n.fetchedAt)
+      setCampaigns(c.items); setGroups(g.items); setFundraisers(f.items)
     }catch{
       // Keep whatever is on screen rather than blanking the dashboard.
     }finally{ setRefreshing(false) }
@@ -1047,7 +1160,11 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
       // Patch the one total in place instead of refetching every list.
       const d=payload as {fundraiserId:number;raised:number}
       setFundraisers(p=>p.map(f=>f.id===d.fundraiserId?{...f,raised:d.raised}:f))
-    } else if(type==='campaign:new'||type==='group:new'){
+    } else if(type==='campaign:new'||type==='group:new'||type==='fundraiser:new'
+           ||type==='campaign:join'||type==='group:join'){
+      // Creates and joins both change lists and counts that every client shows.
+      // Refetch without freshNews: this is community data, and there is no
+      // reason to hit the news publishers because someone joined a group.
       load()
     } else if(type==='alert:new'){
       const a=payload as {message:string}
@@ -1123,7 +1240,12 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
             <span className="dot dot-green"/>
             <span className="val" style={{fontSize:11,color:'rgba(123,92,255,0.7)'}}>LIVE</span>
           </div>
-          <button className="btn btn-ghost btn-xs" onClick={load} disabled={refreshing} style={{display:'flex',alignItems:'center',gap:5}}>
+          {/* On News this forces a refetch past the 10-minute feed cache, which
+              is what a reader means by Refresh there; elsewhere it would only
+              pester the publishers, so it stays cached.
+              Wrapped, not passed bare: onClick hands the button a MouseEvent,
+              which as load's first arg would read as freshNews=true. */}
+          <button className="btn btn-ghost btn-xs" onClick={()=>load(tab==='news')} disabled={refreshing} style={{display:'flex',alignItems:'center',gap:5}}>
             <RefreshCw size={12} style={{animation:refreshing?'spin 1s linear infinite':'none'}}/>{refreshing?'Syncing':'Refresh'}
           </button>
         </div>
@@ -1131,13 +1253,13 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
 
       {/* Content — Home is full-bleed so the globe reaches every edge. */}
       <div style={{flex:1,overflowY:tab==='overview'?'hidden':'auto',padding:tab==='overview'?0:'22px 26px'}}>
-        {tab==='overview'&&<Overview sensors={sensors} onRefresh={load} refreshing={refreshing}/>}
-        {tab==='sensors'&&<Sensors sensors={sensors} onRefresh={load}/>}
+        {tab==='overview'&&<Overview sensors={sensors} onRefresh={()=>load()} refreshing={refreshing}/>}
+        {tab==='sensors'&&<Sensors sensors={sensors} onRefresh={()=>load()}/>}
         {tab==='analytics'&&<Analytics sensors={sensors}/>}
-        {tab==='news'&&<NewsTab news={news}/>}
-        {tab==='campaigns'&&<CampaignsTab campaigns={campaigns} user={user} onRefresh={load}/>}
-        {tab==='groups'&&<GroupsTab groups={groups} user={user} onRefresh={load}/>}
-        {tab==='fundraisers'&&<FundraisersTab fundraisers={fundraisers} user={user} onRefresh={load} onToast={showToast}/>}
+        {tab==='news'&&<NewsTab news={news} live={newsLive} fetchedAt={newsFetchedAt}/>}
+        {tab==='campaigns'&&<CampaignsTab campaigns={campaigns} user={user} onRefresh={()=>load()}/>}
+        {tab==='groups'&&<GroupsTab groups={groups} user={user} onRefresh={()=>load()}/>}
+        {tab==='fundraisers'&&<FundraisersTab fundraisers={fundraisers} user={user} onRefresh={()=>load()} onToast={showToast}/>}
       </div>
     </main>
 

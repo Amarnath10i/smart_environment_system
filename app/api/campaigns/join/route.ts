@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/api-auth'
 import { joinCampaignSchema, parseBody } from '@/lib/validation'
+import { publish } from '@/lib/events'
 
 /**
  * Joins the *caller* to a campaign. The body carries only the campaign id:
@@ -21,6 +22,7 @@ export async function POST(request: NextRequest) {
       data: { participants: { connect: { id: auth.user.id } } },
       include: { _count: { select: { participants: true } } },
     })
+    publish({ type: 'campaign:join', audience: 'public', payload: { id: campaign.id } })
     return NextResponse.json(campaign)
   } catch (error) {
     // P2025: the campaign id does not exist.
