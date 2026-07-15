@@ -33,6 +33,13 @@ export const messageSchema = z.object({
   groupId: z.coerce.number().int().positive(),
 })
 
+/** groupId is required: without it the endpoint used to dump every group's chat. */
+export const messageQuerySchema = z.object({
+  groupId: z.coerce.number().int().positive(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+})
+
 export const fundraiserSchema = z.object({
   cause: z.string().trim().min(3).max(120),
   description: z.string().trim().min(1).max(5000),
