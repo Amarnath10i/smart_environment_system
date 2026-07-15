@@ -1,10 +1,11 @@
 'use client'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Thermometer, Droplets, Wind, Activity, Radio, Newspaper, Users, Megaphone, HeartHandshake, MessageSquare, MapPin, RefreshCw, Plus, X, Send, AlertTriangle, Globe, UserCircle, Lock, Mail, LogOut, LayoutDashboard, BarChart3, Leaf, CheckCircle, Smartphone, CreditCard, Wallet, ChevronRight, Bell, Zap } from 'lucide-react'
+import { Thermometer, Droplets, Wind, Activity, Radio, Newspaper, Users, Megaphone, HeartHandshake, MessageSquare, MapPin, RefreshCw, Plus, X, Send, AlertTriangle, Globe, UserCircle, Lock, Mail, LogOut, LayoutDashboard, BarChart3, CheckCircle, Smartphone, CreditCard, Wallet, ChevronRight, Bell, Zap } from 'lucide-react'
 import { format } from 'date-fns'
 import { apiGet, apiPost, ApiError, type Page } from '@/lib/api-client'
 import { useEventStream } from '@/lib/use-event-stream'
+import { Logo } from '@/components/Logo'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface User { id:number; email:string; name:string|null; role:string; isVerified?:boolean }
@@ -23,15 +24,15 @@ type Tab = 'overview'|'sensors'|'analytics'|'news'|'campaigns'|'groups'|'fundrai
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const sIcon = (t:string) => { switch(t){case'temperature':return<Thermometer size={15}/>;case'humidity':return<Droplets size={15}/>;case'air_quality':return<Wind size={15}/>;default:return<Activity size={15}/>} }
 const sUnit = (t:string) => ({temperature:'°C',humidity:'%',air_quality:'AQI'}[t]??'')
-const sColor = (t:string) => ({temperature:'#fb923c',humidity:'#22d3ee',air_quality:'#4ade80'}[t]??'#a78bfa')
+const sColor = (t:string) => ({temperature:'#FF5C7A',humidity:'#6C8CFF',air_quality:'#B47CFF'}[t]??'#E45FC4')
 const sLabel = (t:string) => t.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())
 const fmtLoc = (loc:string) => loc  // location is already a name like "City Center"
 const rup = (n:number) => `₹${n.toLocaleString('en-IN')}`
 
 const TTip = ({active,payload,label}:any) => {
   if(!active||!payload?.length) return null
-  return <div style={{background:'rgba(7,13,20,0.97)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:10,padding:'9px 13px',fontFamily:'JetBrains Mono,monospace',fontSize:11.5}}>
-    <p style={{color:'rgba(240,250,244,0.4)',marginBottom:4}}>{label}</p>
+  return <div style={{background:'var(--card)',border:'1px solid rgba(123,92,255,0.3)',borderRadius:10,padding:'9px 13px',fontSize:11.5}}>
+    <p style={{color:'var(--tx3)',marginBottom:4}}>{label}</p>
     {payload.map((p:any,i:number)=><p key={i} style={{color:p.color}}>{p.name}: <b>{typeof p.value==='number'?p.value.toFixed(1):p.value}</b></p>)}
   </div>
 }
@@ -39,8 +40,8 @@ const TTip = ({active,payload,label}:any) => {
 // ─── Toast ────────────────────────────────────────────────────────────────────
 function Toast({msg,type,onClose}:{msg:string;type:'ok'|'err'|'info';onClose:()=>void}) {
   useEffect(()=>{const t=setTimeout(onClose,3500);return()=>clearTimeout(t)},[onClose])
-  const col = type==='ok'?'#4ade80':type==='err'?'#f87171':'#22d3ee'
-  return <div className="toast"><span style={{color:col,fontSize:18}}>{type==='ok'?'✓':type==='err'?'✕':'ℹ'}</span><span style={{fontSize:13,flex:1}}>{msg}</span><button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'rgba(240,250,244,0.4)',padding:2}}><X size={14}/></button></div>
+  const col = type==='ok'?'#30D158':type==='err'?'#FF453A':'#7B5CFF'
+  return <div className="toast"><span style={{color:col,fontSize:18}}>{type==='ok'?'✓':type==='err'?'✕':'ℹ'}</span><span style={{fontSize:13,flex:1}}>{msg}</span><button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',padding:2}}><X size={14}/></button></div>
 }
 
 // ─── Payment Modal ────────────────────────────────────────────────────────────
@@ -77,12 +78,12 @@ function PaymentModal({fundraiser,user,onClose,onSuccess}:{fundraiser:Fundraiser
   return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
     <div className="modal" style={{maxWidth:460}}>
       {/* Header */}
-      <div style={{padding:'18px 20px',borderBottom:'1px solid rgba(74,222,128,0.1)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+      <div style={{padding:'18px 20px',borderBottom:'1px solid rgba(123,92,255,0.1)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <div>
-          <p style={{fontWeight:700,fontSize:15,fontFamily:'Space Grotesk,sans-serif'}}>{fundraiser.cause}</p>
-          <p style={{fontSize:11.5,color:'rgba(240,250,244,0.45)',marginTop:2}}>Secure payment · EarthPulse Foundation</p>
+          <p style={{fontWeight:700,fontSize:15,fontFamily:'inherit'}}>{fundraiser.cause}</p>
+          <p style={{fontSize:11.5,color:'var(--tx3)',marginTop:2}}>Secure payment · EarthPulse Foundation</p>
         </div>
-        <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'rgba(240,250,244,0.4)',padding:4}}><X size={17}/></button>
+        <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',padding:4}}><X size={17}/></button>
       </div>
 
       <div style={{padding:'20px',overflowY:'auto',flex:1}}>
@@ -90,13 +91,13 @@ function PaymentModal({fundraiser,user,onClose,onSuccess}:{fundraiser:Fundraiser
           <p className="lbl">Select Amount</p>
           <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8,marginBottom:14}}>
             {quickAmts.map(a=><button key={a} onClick={()=>setAmount(String(a))} className="btn-pay btn-xs"
-              style={{padding:'10px 4px',fontSize:12,borderRadius:10,textAlign:'center',cursor:'pointer',border:`1px solid ${amount===String(a)?'rgba(74,222,128,0.5)':'rgba(99,210,140,0.12)'}`,background:amount===String(a)?'rgba(74,222,128,0.1)':'rgba(255,255,255,0.03)',color:amount===String(a)?'#4ade80':'rgba(240,250,244,0.7)',transition:'all .15s'}}>
+              style={{padding:'10px 4px',fontSize:12,borderRadius:10,textAlign:'center',cursor:'pointer',border:`1px solid ${amount===String(a)?'rgba(123,92,255,0.5)':'rgba(123,92,255,0.12)'}`,background:amount===String(a)?'rgba(123,92,255,0.1)':'rgba(255,255,255,0.045)',color:amount===String(a)?'#7B5CFF':'var(--tx2)',transition:'all .15s'}}>
               ₹{a}
             </button>)}
           </div>
           <p className="lbl">Or enter custom</p>
           <div style={{position:'relative',marginBottom:20}}>
-            <span style={{position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',fontSize:16,color:'rgba(74,222,128,0.7)'}}>₹</span>
+            <span style={{position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',fontSize:16,color:'rgba(123,92,255,0.7)'}}>₹</span>
             <input className="inp" style={{paddingLeft:30}} type="number" placeholder="Enter amount" value={amount} onChange={e=>setAmount(e.target.value)} />
           </div>
           <button className="btn btn-green" style={{width:'100%',padding:'12px'}} onClick={()=>amount&&parseFloat(amount)>0&&setStep('method')}>
@@ -107,13 +108,13 @@ function PaymentModal({fundraiser,user,onClose,onSuccess}:{fundraiser:Fundraiser
         {step==='method' && <>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
             <p className="lbl" style={{marginBottom:0}}>Choose Payment</p>
-            <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:17,color:'#4ade80'}}>₹{parseFloat(amount).toLocaleString('en-IN')}</span>
+            <span style={{fontSize:17,color:'#30D158'}}>₹{parseFloat(amount).toLocaleString('en-IN')}</span>
           </div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:18}}>
             {UPI_APPS.map(app=><button key={app.id} onClick={()=>setMethod(app.id)} className="btn-pay"
-              style={{borderColor:method===app.id?'rgba(74,222,128,0.5)':'rgba(99,210,140,0.1)',background:method===app.id?'rgba(74,222,128,0.08)':'rgba(255,255,255,0.02)'}}>
+              style={{borderColor:method===app.id?'rgba(123,92,255,0.5)':'rgba(123,92,255,0.1)',background:method===app.id?'rgba(123,92,255,0.08)':'rgba(255,255,255,0.035)'}}>
               <span style={{fontSize:24}}>{app.emoji}</span>
-              <span style={{fontSize:11,color:'rgba(240,250,244,0.7)',fontWeight:500}}>{app.name}</span>
+              <span style={{fontSize:11,color:'var(--tx2)',fontWeight:500}}>{app.name}</span>
             </button>)}
           </div>
           {method && <>
@@ -129,17 +130,17 @@ function PaymentModal({fundraiser,user,onClose,onSuccess}:{fundraiser:Fundraiser
         </>}
 
         {step==='processing' && <div style={{textAlign:'center',padding:'32px 0'}}>
-          <div style={{width:56,height:56,borderRadius:'50%',border:'2px solid rgba(74,222,128,0.2)',borderTopColor:'#4ade80',margin:'0 auto 18px',animation:'spin 0.9s linear infinite'}}/>
+          <div style={{width:56,height:56,borderRadius:'50%',border:'2px solid rgba(123,92,255,0.2)',borderTopColor:'#7B5CFF',margin:'0 auto 18px',animation:'spin 0.9s linear infinite'}}/>
           <p style={{fontSize:15,fontWeight:600}}>Processing Payment</p>
-          <p style={{fontSize:13,color:'rgba(240,250,244,0.45)',marginTop:6}}>Please wait, do not close...</p>
+          <p style={{fontSize:13,color:'var(--tx3)',marginTop:6}}>Please wait, do not close...</p>
         </div>}
 
         {step==='done' && <div style={{textAlign:'center',padding:'32px 0'}}>
-          <div style={{width:60,height:60,borderRadius:'50%',background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.4)',margin:'0 auto 18px',display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <CheckCircle size={28} color="#4ade80"/>
+          <div style={{width:60,height:60,borderRadius:'50%',background:'rgba(123,92,255,0.12)',border:'1px solid rgba(123,92,255,0.4)',margin:'0 auto 18px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <CheckCircle size={28} color="#30D158"/>
           </div>
-          <p style={{fontSize:16,fontWeight:700,color:'#4ade80'}}>Payment Successful!</p>
-          <p style={{fontSize:13,color:'rgba(240,250,244,0.5)',marginTop:6}}>₹{parseFloat(amount).toLocaleString('en-IN')} donated via {UPI_APPS.find(a=>a.id===method)?.name}</p>
+          <p style={{fontSize:16,fontWeight:700,color:'#30D158'}}>Payment Successful!</p>
+          <p style={{fontSize:13,color:'var(--tx2)',marginTop:6}}>₹{parseFloat(amount).toLocaleString('en-IN')} donated via {UPI_APPS.find(a=>a.id===method)?.name}</p>
         </div>}
       </div>
     </div>
@@ -172,17 +173,19 @@ function AuthScreen({onAuth}:{onAuth:(u:User,t:string,msg?:string)=>void}) {
     <div style={{width:'100%',maxWidth:400,position:'relative',zIndex:1,animation:'slideUp .45s ease'}}>
       {/* Brand */}
       <div style={{textAlign:'center',marginBottom:36}}>
-        <div style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:62,height:62,borderRadius:18,background:'rgba(74,222,128,0.1)',border:'1px solid rgba(74,222,128,0.3)',boxShadow:'0 0 28px rgba(74,222,128,0.18)',marginBottom:14}}>
-          <Leaf size={26} color="#4ade80"/>
+        <div style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:62,height:62,borderRadius:18,background:'var(--brand-grad)',color:'#FFFFFF',boxShadow:'0 8px 28px rgba(58,32,121,0.5)',marginBottom:16}}>
+          <Logo size={30}/>
         </div>
-        <h1 style={{fontFamily:'Space Grotesk,sans-serif',fontSize:23,fontWeight:700,color:'#4ade80',letterSpacing:'0.06em',textShadow:'0 0 24px rgba(74,222,128,0.4)'}}>EarthPulse</h1>
-        <p style={{fontSize:12.5,color:'var(--tx3)',marginTop:5}}>Smart Environment Monitoring System</p>
+        <h1 className="brand-text" style={{fontSize:34,fontWeight:600,letterSpacing:"-0.03em"}}>EarthPulse</h1>
+        <p style={{fontSize:15,color:'var(--tx2)',marginTop:6,letterSpacing:'-0.01em'}}>Smart Environment Monitoring System</p>
       </div>
 
-      <div className="card" style={{padding:'28px 32px'}}>
+      <div className="card glass-ring" style={{padding:'28px 32px',borderRadius:22}}>
         {/* Mode toggle */}
-        <div style={{display:'flex',background:'rgba(0,0,0,0.25)',borderRadius:10,padding:4,marginBottom:24}}>
-          {(['login','register'] as const).map(m=><button key={m} onClick={()=>{setMode(m);setError('');setInfo('')}} style={{flex:1,padding:'8px 0',borderRadius:7,border:'none',cursor:'pointer',fontFamily:'Plus Jakarta Sans,sans-serif',fontSize:12.5,fontWeight:600,transition:'all .18s',background:mode===m?'rgba(74,222,128,0.14)':'transparent',color:mode===m?'#4ade80':'rgba(240,250,244,0.4)',letterSpacing:'0.03em'}}>
+        {/* Segmented control: the selected side is a lifted light pill with
+            white text. Violet-on-navy was both off-palette and low contrast. */}
+        <div style={{display:'flex',background:'rgba(0,0,0,0.4)',borderRadius:11,padding:4,marginBottom:24,border:'1px solid rgba(255,255,255,0.06)'}}>
+          {(['login','register'] as const).map(m=><button key={m} onClick={()=>{setMode(m);setError('');setInfo('')}} style={{flex:1,padding:'9px 0',borderRadius:8,border:'1px solid '+(mode===m?'rgba(255,255,255,0.14)':'transparent'),cursor:'pointer',fontFamily:'inherit',fontSize:13.5,fontWeight:mode===m?590:450,transition:'all .18s',background:mode===m?'linear-gradient(180deg,rgba(255,255,255,0.18),rgba(255,255,255,0.07))':'transparent',color:mode===m?'#FFFFFF':'var(--tx3)',letterSpacing:'-0.01em',boxShadow:mode===m?'inset 0 1px 0 rgba(255,255,255,0.22), 0 2px 8px rgba(0,0,0,0.4)':'none'}}>
             {m==='login'?'Sign In':'Register'}
           </button>)}
         </div>
@@ -192,16 +195,16 @@ function AuthScreen({onAuth}:{onAuth:(u:User,t:string,msg?:string)=>void}) {
           <div><label className="lbl">Email</label><div style={{position:'relative'}}><Mail size={14} style={{position:'absolute',left:13,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)'}}/><input className="inp" style={{paddingLeft:36}} type="email" placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()}/></div></div>
           <div><label className="lbl">Password</label><div style={{position:'relative'}}><Lock size={14} style={{position:'absolute',left:13,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)'}}/><input className="inp" style={{paddingLeft:36}} type="password" placeholder="••••••••" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()}/></div></div>
 
-          {error&&<div style={{background:'rgba(248,113,113,0.08)',border:'1px solid rgba(248,113,113,0.25)',borderRadius:9,padding:'9px 13px',display:'flex',gap:8,alignItems:'center'}}><AlertTriangle size={14} color="#f87171"/><span style={{color:'#f87171',fontSize:12.5}}>{error}</span></div>}
-          {info&&<div style={{background:'rgba(74,222,128,0.08)',border:'1px solid rgba(74,222,128,0.25)',borderRadius:9,padding:'9px 13px',display:'flex',gap:8,alignItems:'center'}}><CheckCircle size={14} color="#4ade80"/><span style={{color:'#4ade80',fontSize:12.5}}>{info}</span></div>}
+          {error&&<div style={{background:'rgba(255,69,58,0.08)',border:'1px solid rgba(255,69,58,0.25)',borderRadius:9,padding:'9px 13px',display:'flex',gap:8,alignItems:'center'}}><AlertTriangle size={14} color="#FF453A"/><span style={{color:'#FF453A',fontSize:12.5}}>{error}</span></div>}
+          {info&&<div style={{background:'rgba(123,92,255,0.08)',border:'1px solid rgba(123,92,255,0.25)',borderRadius:9,padding:'9px 13px',display:'flex',gap:8,alignItems:'center'}}><CheckCircle size={14} color="#7B5CFF"/><span style={{color:'#7B5CFF',fontSize:12.5}}>{info}</span></div>}
 
           <button className="btn btn-green" style={{padding:'11px',marginTop:4,width:'100%',fontSize:14}} onClick={submit} disabled={loading}>
-            {loading?<span className="spin" style={{display:'inline-block',width:16,height:16,borderRadius:'50%',border:'2px solid rgba(74,222,128,0.3)',borderTopColor:'#4ade80'}}/>:mode==='login'?'Sign In':'Create Account'}
+            {loading?<span className="spin" style={{display:'inline-block',width:16,height:16,borderRadius:'50%',border:'2px solid rgba(123,92,255,0.3)',borderTopColor:'#7B5CFF'}}/>:mode==='login'?'Sign In':'Create Account'}
           </button>
         </div>
 
         <div className="hr"/>
-        <p style={{textAlign:'center',fontSize:11.5,color:'var(--tx3)'}}>Demo: <span style={{fontFamily:'JetBrains Mono,monospace',color:'rgba(74,222,128,0.7)'}}>admin@example.com</span> / <span style={{fontFamily:'JetBrains Mono,monospace',color:'rgba(74,222,128,0.7)'}}>password</span></p>
+        <p style={{textAlign:'center',fontSize:11.5,color:'var(--tx3)'}}>Demo: <span style={{color:'rgba(123,92,255,0.7)'}}>admin@example.com</span> / <span style={{color:'rgba(123,92,255,0.7)'}}>password</span></p>
       </div>
     </div>
   </div>
@@ -240,10 +243,10 @@ function Overview({sensors}:{sensors:Sensor[]}) {
       })}
       <div className="card" style={{padding:'18px 20px'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-          <div style={{width:32,height:32,borderRadius:9,background:'rgba(167,139,250,0.14)',border:'1px solid rgba(167,139,250,0.28)',display:'flex',alignItems:'center',justifyContent:'center',color:'#a78bfa'}}><Radio size={15}/></div>
+          <div style={{width:32,height:32,borderRadius:9,background:'rgba(180,124,255,0.14)',border:'1px solid rgba(180,124,255,0.28)',display:'flex',alignItems:'center',justifyContent:'center',color:'#B47CFF'}}><Radio size={15}/></div>
         </div>
         <div style={{display:'flex',alignItems:'baseline',gap:4,marginBottom:4}}>
-          <span className="val" style={{fontSize:28,color:'#a78bfa',textShadow:'0 0 18px rgba(167,139,250,0.4)'}}>{active}</span>
+          <span className="val" style={{fontSize:28,color:'#B47CFF'}}>{active}</span>
           <span style={{fontSize:13,color:'var(--tx3)'}}>/{sensors.length}</span>
         </div>
         <p style={{fontSize:12,fontWeight:600,marginBottom:2}}>Active Sensors</p>
@@ -252,28 +255,37 @@ function Overview({sensors}:{sensors:Sensor[]}) {
     </div>
 
     {/* Mini charts */}
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:14}}>
+    {/* 420px min => two columns on a desktop width, so four sensors form a
+        2x2 block instead of 3 + one orphan beside dead space. */}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(420px,1fr))',gap:16}}>
       {list.map(s=>{
         const c=sColor(s.type)
-        const pts=[...s.data].reverse().map((d,i)=>({t:format(new Date(d.timestamp),'HH:mm'),v:parseFloat(d.value.toFixed(2))}))
+        // /api/sensors already returns oldest -> newest; reversing here made
+        // every chart read right-to-left.
+        const pts=s.data.map(d=>({t:format(new Date(d.timestamp),'HH:mm'),v:parseFloat(d.value.toFixed(2))}))
+        const latest=pts.length?pts[pts.length-1].v:null
         return <div key={s.type} className="card" style={{padding:'18px 18px 10px'}}>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
-            <div style={{display:'flex',alignItems:'center',gap:7}}>
-              <span style={{color:c}}>{sIcon(s.type)}</span>
-              <span style={{fontFamily:'Space Grotesk,sans-serif',fontSize:12,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.08em',color:c}}>{sLabel(s.type)}</span>
+          <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:10}}>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <span style={{color:c,display:'flex'}}>{sIcon(s.type)}</span>
+              <div>
+                <p style={{fontSize:15,fontWeight:590,color:'var(--tx1)',letterSpacing:'-0.015em'}}>{sLabel(s.type)}</p>
+                <div style={{display:'flex',alignItems:'center',gap:4,marginTop:1}}>
+                  <MapPin size={10} style={{color:'var(--tx3)'}}/><span style={{fontSize:11.5,color:'var(--tx3)'}}>{s.location}</span>
+                </div>
+              </div>
             </div>
-            <div style={{display:'flex',alignItems:'center',gap:5}}>
-              <MapPin size={10} style={{color:'var(--tx3)'}}/><span style={{fontSize:11,color:'var(--tx3)'}}>{s.location}</span>
-            </div>
+            {latest!==null&&<p className="val" style={{fontSize:19,fontWeight:600,color:'var(--tx1)'}}>{latest}<span style={{fontSize:11,color:'var(--tx3)',marginLeft:2}}>{sUnit(s.type)}</span></p>}
           </div>
           <ResponsiveContainer width="100%" height={110}>
-            <AreaChart data={pts}>
+            <AreaChart data={pts} margin={{top:4,right:4,left:0,bottom:0}}>
               <defs><linearGradient id={`g${s.type}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={c} stopOpacity={0.22}/><stop offset="100%" stopColor={c} stopOpacity={0.01}/></linearGradient></defs>
-              <CartesianGrid strokeDasharray="2 3" stroke="rgba(74,222,128,0.06)"/>
-              <XAxis dataKey="t" tick={{fontSize:9,fill:'rgba(240,250,244,0.3)'}}/>
-              <YAxis tick={{fontSize:9,fill:'rgba(240,250,244,0.3)'}} width={32}/>
+              <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.07)" vertical={false}/>
+              {/* minTickGap stops the labels colliding into a grey smear */}
+              <XAxis dataKey="t" tick={{fontSize:10,fill:'var(--tx3)'}} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={44}/>
+              <YAxis tick={{fontSize:10,fill:'var(--tx3)'}} width={30} tickLine={false} axisLine={false}/>
               <Tooltip content={<TTip/>}/>
-              <Area type="monotone" dataKey="v" name={sLabel(s.type)} stroke={c} strokeWidth={1.8} fill={`url(#g${s.type})`} dot={false}/>
+              <Area type="monotone" dataKey="v" name={sLabel(s.type)} stroke={c} strokeWidth={2} fill={`url(#g${s.type})`} dot={false}/>
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -400,11 +412,11 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
   }
 
   const uvLevel=(uv:number)=>{
-    if(uv<=2)return{label:'Low',color:'#4ade80'}
-    if(uv<=5)return{label:'Moderate',color:'#facc15'}
-    if(uv<=7)return{label:'High',color:'#fb923c'}
-    if(uv<=10)return{label:'Very High',color:'#f87171'}
-    return{label:'Extreme',color:'#a78bfa'}
+    if(uv<=2)return{label:'Low',color:'#30D158'}
+    if(uv<=5)return{label:'Moderate',color:'#FFD60A'}
+    if(uv<=7)return{label:'High',color:'#FF5C7A'}
+    if(uv<=10)return{label:'Very High',color:'#FF453A'}
+    return{label:'Extreme',color:'#B47CFF'}
   }
 
   return <div className="anim-up" style={{display:'flex',flexDirection:'column',gap:18}}>
@@ -423,7 +435,7 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
           <MapPin size={13}/>
           {locLoading
             ? <span style={{display:'flex',alignItems:'center',gap:6}}>
-                <span style={{width:11,height:11,borderRadius:'50%',border:'1.5px solid rgba(74,222,128,0.3)',borderTopColor:'#4ade80',animation:'spin 0.9s linear infinite',display:'inline-block'}}/>
+                <span style={{width:11,height:11,borderRadius:'50%',border:'1.5px solid rgba(123,92,255,0.3)',borderTopColor:'#7B5CFF',animation:'spin 0.9s linear infinite',display:'inline-block'}}/>
                 Fetching...
               </span>
             : weatherLoaded ? 'Refresh' : 'Get My Weather'}
@@ -434,13 +446,13 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
 
     {/* Error */}
     {locError&&(
-      <div style={{background:'rgba(248,113,113,0.08)',border:'1px solid rgba(248,113,113,0.22)',borderRadius:10,padding:'12px 16px',display:'flex',gap:10,alignItems:'flex-start'}}>
-        <AlertTriangle size={15} color="#f87171" style={{flexShrink:0,marginTop:1}}/>
+      <div style={{background:'rgba(255,69,58,0.08)',border:'1px solid rgba(255,69,58,0.22)',borderRadius:10,padding:'12px 16px',display:'flex',gap:10,alignItems:'flex-start'}}>
+        <AlertTriangle size={15} color="#FF453A" style={{flexShrink:0,marginTop:1}}/>
         <div>
-          <p style={{fontSize:13,color:'#f87171',fontWeight:600,marginBottom:3}}>Error</p>
-          <p style={{fontSize:12.5,color:'rgba(248,113,113,0.75)'}}>{locError}</p>
+          <p style={{fontSize:13,color:'#FF453A',fontWeight:600,marginBottom:3}}>Error</p>
+          <p style={{fontSize:12.5,color:'rgba(255,69,58,0.75)'}}>{locError}</p>
         </div>
-        <button onClick={()=>setLocError('')} style={{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',color:'rgba(248,113,113,0.5)',padding:2}}><X size={14}/></button>
+        <button onClick={()=>setLocError('')} style={{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',color:'rgba(255,69,58,0.5)',padding:2}}><X size={14}/></button>
       </div>
     )}
 
@@ -448,7 +460,7 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
     {!weatherLoaded&&!locLoading&&!locError&&(
       <div className="card" style={{padding:'48px 24px',textAlign:'center',borderStyle:'dashed'}}>
         <div style={{fontSize:48,marginBottom:16}}>🌍</div>
-        <p style={{fontSize:15,fontWeight:700,marginBottom:8,fontFamily:'Space Grotesk,sans-serif'}}>Real-Time Weather for Your Location</p>
+        <p style={{fontSize:15,fontWeight:700,marginBottom:8,fontFamily:'inherit'}}>Real-Time Weather for Your Location</p>
         <p style={{fontSize:13,color:'var(--tx3)',marginBottom:24,lineHeight:1.6}}>Click "Get My Weather" to fetch live temperature, humidity, UV index, wind and more for your exact coordinates via Open-Meteo.</p>
         <button className="btn btn-green" style={{margin:'0 auto',padding:'11px 28px'}} onClick={fetchWeather}>
           <MapPin size={15}/>Get My Weather
@@ -459,7 +471,7 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
     {/* Loading skeleton */}
     {locLoading&&(
       <div className="card" style={{padding:'40px 24px',textAlign:'center'}}>
-        <div style={{width:48,height:48,borderRadius:'50%',border:'2.5px solid rgba(74,222,128,0.15)',borderTopColor:'#4ade80',animation:'spin 0.9s linear infinite',margin:'0 auto 18px'}}/>
+        <div style={{width:48,height:48,borderRadius:'50%',border:'2.5px solid rgba(123,92,255,0.15)',borderTopColor:'#7B5CFF',animation:'spin 0.9s linear infinite',margin:'0 auto 18px'}}/>
         <p style={{fontSize:14,fontWeight:600,marginBottom:6}}>Detecting your location...</p>
         <p style={{fontSize:12.5,color:'var(--tx3)'}}>Fetching live weather from Open-Meteo</p>
       </div>
@@ -470,12 +482,12 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
       <div style={{display:'flex',flexDirection:'column',gap:14}}>
 
         {/* Location + main temp hero */}
-        <div className="card" style={{padding:'24px 26px',background:'linear-gradient(135deg,rgba(74,222,128,0.07),rgba(34,211,238,0.04))'}}>
+        <div className="card" style={{padding:'24px 26px',background:'linear-gradient(135deg,rgba(123,92,255,0.07),rgba(108,140,255,0.04))'}}>
           <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:16}}>
             <div>
               <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
-                <MapPin size={14} color="#22d3ee"/>
-                <p style={{fontSize:13,color:'#22d3ee',fontWeight:600}}>{userCity}</p>
+                <MapPin size={14} color="#6C8CFF"/>
+                <p style={{fontSize:13,color:'#6C8CFF',fontWeight:600}}>{userCity}</p>
               </div>
               {userCoords&&<p className="val" style={{fontSize:10.5,color:'var(--tx3)',marginBottom:16}}>
                 {userCoords.lat.toFixed(5)}°N · {userCoords.lon.toFixed(5)}°E
@@ -484,7 +496,7 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
                 <span style={{fontSize:72,lineHeight:1}}>{wmoEmoji(weather.weathercode)}</span>
                 <div>
                   <div style={{display:'flex',alignItems:'baseline',gap:6}}>
-                    <span className="val" style={{fontSize:56,fontWeight:400,color:'#4ade80',textShadow:'0 0 30px rgba(74,222,128,0.4)',lineHeight:1}}>{weather.temperature?.toFixed(1)}</span>
+                    <span className="val" style={{fontSize:56,fontWeight:400,color:'#7B5CFF',lineHeight:1}}>{weather.temperature?.toFixed(1)}</span>
                     <span style={{fontSize:22,color:'var(--tx3)'}}>°C</span>
                   </div>
                   <p style={{fontSize:14,color:'var(--tx2)',marginTop:4}}>{wmoDesc(weather.weathercode)}</p>
@@ -498,10 +510,10 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
               <span className={`badge ${weather.isDay?'b-amber':'b-purple'}`} style={{alignSelf:'flex-end',marginBottom:4}}>
                 {weather.isDay?'☀️ Daytime':'🌙 Nighttime'}
               </span>
-              {weather.humidity!=null&&<div style={{background:'rgba(255,255,255,0.04)',borderRadius:10,padding:'10px 14px'}}>
+              {weather.humidity!=null&&<div style={{background:'rgba(255,255,255,0.05)',borderRadius:10,padding:'10px 14px'}}>
                 <p style={{fontSize:10,color:'var(--tx3)',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.08em'}}>Humidity</p>
-                <p className="val" style={{fontSize:22,color:'#22d3ee'}}>{weather.humidity}<span style={{fontSize:13,color:'var(--tx3)',marginLeft:2}}>%</span></p>
-                <div className="prog" style={{marginTop:6}}><div className="prog-fill" style={{width:`${weather.humidity}%`,background:'linear-gradient(90deg,#22d3ee,#4ade80)'}}/></div>
+                <p className="val" style={{fontSize:22,color:'#6C8CFF'}}>{weather.humidity}<span style={{fontSize:13,color:'var(--tx3)',marginLeft:2}}>%</span></p>
+                <div className="prog" style={{marginTop:6}}><div className="prog-fill" style={{width:`${weather.humidity}%`,background:'linear-gradient(90deg,#6C8CFF,#7B5CFF)'}}/></div>
               </div>}
             </div>
           </div>
@@ -510,10 +522,10 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
         {/* Stats grid */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:12}}>
           {[
-            {label:'Wind Speed',value:`${weather.windspeed?.toFixed(1)}`,unit:'km/h',icon:'💨',color:'#a78bfa',sub:weather.winddirection!=null?`Direction: ${windDir(weather.winddirection)}`:''},
-            {label:'Precipitation',value:`${weather.precipitation_probability??'—'}`,unit:'%',icon:'🌧️',color:'#22d3ee',sub:'Chance of rain'},
+            {label:'Wind Speed',value:`${weather.windspeed?.toFixed(1)}`,unit:'km/h',icon:'💨',color:'#B47CFF',sub:weather.winddirection!=null?`Direction: ${windDir(weather.winddirection)}`:''},
+            {label:'Precipitation',value:`${weather.precipitation_probability??'—'}`,unit:'%',icon:'🌧️',color:'#6C8CFF',sub:'Chance of rain'},
             {label:'UV Index',value:`${weather.uv_index?.toFixed(1)??'—'}`,unit:'',icon:'🔆',color:uvLevel(weather.uv_index??0).color,sub:`${uvLevel(weather.uv_index??0).label} risk`},
-            {label:'Visibility',value:weather.visibility!=null?`${(weather.visibility/1000).toFixed(1)}`:'—',unit:'km',icon:'👁️',color:'#fb923c',sub:'Horizontal range'},
+            {label:'Visibility',value:weather.visibility!=null?`${(weather.visibility/1000).toFixed(1)}`:'—',unit:'km',icon:'👁️',color:'#FF5C7A',sub:'Horizontal range'},
           ].map(item=>(
             <div key={item.label} className="card2" style={{padding:'14px 16px'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
@@ -537,21 +549,21 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
               <AreaChart data={weather.hourlyTemps}>
                 <defs>
                   <linearGradient id="gradTemp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#4ade80" stopOpacity={0.25}/>
-                    <stop offset="100%" stopColor="#4ade80" stopOpacity={0.01}/>
+                    <stop offset="0%" stopColor="#FF5C7A" stopOpacity={0.25}/>
+                    <stop offset="100%" stopColor="#FF5C7A" stopOpacity={0.01}/>
                   </linearGradient>
                   <linearGradient id="gradHumid" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.2}/>
-                    <stop offset="100%" stopColor="#22d3ee" stopOpacity={0.01}/>
+                    <stop offset="0%" stopColor="#6C8CFF" stopOpacity={0.2}/>
+                    <stop offset="100%" stopColor="#6C8CFF" stopOpacity={0.01}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="2 3" stroke="rgba(74,222,128,0.06)"/>
-                <XAxis dataKey="time" tick={{fontSize:10,fill:'rgba(240,250,244,0.3)'}}/>
-                <YAxis yAxisId="temp" tick={{fontSize:10,fill:'rgba(240,250,244,0.3)'}} width={30}/>
-                <YAxis yAxisId="humid" orientation="right" tick={{fontSize:10,fill:'rgba(240,250,244,0.3)'}} width={30}/>
+                <CartesianGrid strokeDasharray="2 3" stroke="rgba(123,92,255,0.06)"/>
+                <XAxis dataKey="time" tick={{fontSize:10,fill:'var(--tx3)'}}/>
+                <YAxis yAxisId="temp" tick={{fontSize:10,fill:'var(--tx3)'}} width={30}/>
+                <YAxis yAxisId="humid" orientation="right" tick={{fontSize:10,fill:'var(--tx3)'}} width={30}/>
                 <Tooltip content={<TTip/>}/>
-                <Area yAxisId="temp" type="monotone" dataKey="temp" name="Temp °C" stroke="#4ade80" strokeWidth={2} fill="url(#gradTemp)" dot={false}/>
-                <Area yAxisId="humid" type="monotone" dataKey="humidity" name="Humidity %" stroke="#22d3ee" strokeWidth={1.5} fill="url(#gradHumid)" dot={false}/>
+                <Area yAxisId="temp" type="monotone" dataKey="temp" name="Temp °C" stroke="#FF5C7A" strokeWidth={2} fill="url(#gradTemp)" dot={false}/>
+                <Area yAxisId="humid" type="monotone" dataKey="humidity" name="Humidity %" stroke="#6C8CFF" strokeWidth={1.5} fill="url(#gradHumid)" dot={false}/>
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -559,7 +571,7 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
 
         {/* Attribution */}
         <p style={{fontSize:11,color:'var(--tx3)',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center',gap:5}}>
-          <Globe size={11}/> Weather data by <a href="https://open-meteo.com" target="_blank" rel="noreferrer" style={{color:'rgba(74,222,128,0.6)',textDecoration:'none'}}>Open-Meteo</a> · Free & open-source API · Updated hourly
+          <Globe size={11}/> Weather data by <a href="https://open-meteo.com" target="_blank" rel="noreferrer" style={{color:'rgba(123,92,255,0.6)',textDecoration:'none'}}>Open-Meteo</a> · Free & open-source API · Updated hourly
         </p>
       </div>
     )}
@@ -588,7 +600,7 @@ function Sensors({sensors,onRefresh}:{sensors:Sensor[];onRefresh:()=>void}) {
               <span style={{fontSize:14,color:'var(--tx3)'}}>{sUnit(s.type)}</span>
             </div>
             <div className="hr"/>
-            <p style={{fontSize:11,color:'var(--tx3)',fontFamily:'JetBrains Mono,monospace'}}>
+            <p style={{fontSize:11,color:'var(--tx3)',fontFamily:'inherit'}}>
               ID #{s.id} · Updated {s.data[0]?format(new Date(s.data[0].timestamp),'HH:mm'):'N/A'}
             </p>
           </div>
@@ -616,13 +628,13 @@ function Analytics({sensors}:{sensors:Sensor[]}) {
       <p style={{fontSize:11,color:'var(--tx3)',letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:14}}>Avg / Max / Min per Type</p>
       <ResponsiveContainer width="100%" height={180}>
         <BarChart data={summary} barGap={4}>
-          <CartesianGrid strokeDasharray="2 3" stroke="rgba(74,222,128,0.06)"/>
-          <XAxis dataKey="type" tick={{fontSize:11,fill:'rgba(240,250,244,0.35)'}}/>
-          <YAxis tick={{fontSize:11,fill:'rgba(240,250,244,0.35)'}} width={34}/>
+          <CartesianGrid strokeDasharray="2 3" stroke="rgba(123,92,255,0.06)"/>
+          <XAxis dataKey="type" tick={{fontSize:11,fill:'var(--tx3)'}}/>
+          <YAxis tick={{fontSize:11,fill:'var(--tx3)'}} width={34}/>
           <Tooltip content={<TTip/>}/>
-          <Bar dataKey="avg" name="Avg" fill="#4ade80" opacity={0.75} radius={[4,4,0,0]}/>
-          <Bar dataKey="max" name="Max" fill="#fb923c" opacity={0.65} radius={[4,4,0,0]}/>
-          <Bar dataKey="min" name="Min" fill="#22d3ee" opacity={0.65} radius={[4,4,0,0]}/>
+          <Bar dataKey="avg" name="Avg" fill="#7B5CFF" opacity={0.75} radius={[4,4,0,0]}/>
+          <Bar dataKey="max" name="Max" fill="#FF5C7A" opacity={0.65} radius={[4,4,0,0]}/>
+          <Bar dataKey="min" name="Min" fill="#6C8CFF" opacity={0.65} radius={[4,4,0,0]}/>
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -634,15 +646,15 @@ function Analytics({sensors}:{sensors:Sensor[]}) {
         return <div key={type} className="card" style={{padding:'18px 18px 10px'}}>
           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:14}}>
             <span style={{color:c}}>{sIcon(type)}</span>
-            <span style={{fontFamily:'Space Grotesk,sans-serif',fontSize:12,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.08em',color:c}}>{sLabel(type)}</span>
+            <span style={{fontSize:12,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.08em',color:c}}>{sLabel(type)}</span>
             <span className="badge b-cyan" style={{marginLeft:'auto'}}>{s.data.length} pts</span>
           </div>
           <ResponsiveContainer width="100%" height={130}>
             <AreaChart data={pts}>
               <defs><linearGradient id={`ag${type}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={c} stopOpacity={0.2}/><stop offset="100%" stopColor={c} stopOpacity={0}/></linearGradient></defs>
-              <CartesianGrid strokeDasharray="2 3" stroke="rgba(74,222,128,0.05)"/>
-              <XAxis dataKey="t" tick={{fontSize:9,fill:'rgba(240,250,244,0.3)'}}/>
-              <YAxis tick={{fontSize:9,fill:'rgba(240,250,244,0.3)'}} width={32}/>
+              <CartesianGrid strokeDasharray="2 3" stroke="rgba(123,92,255,0.05)"/>
+              <XAxis dataKey="t" tick={{fontSize:9,fill:'var(--tx3)'}}/>
+              <YAxis tick={{fontSize:9,fill:'var(--tx3)'}} width={32}/>
               <Tooltip content={<TTip/>}/>
               <Area type="monotone" dataKey="v" name={sLabel(type)} stroke={c} strokeWidth={1.8} fill={`url(#ag${type})`} dot={false}/>
             </AreaChart>
@@ -660,7 +672,7 @@ function NewsTab({news}:{news:NewsItem[]}) {
     {!news.length&&<p style={{color:'var(--tx3)',textAlign:'center',padding:'50px 0'}}>No articles yet.</p>}
     {news.map((n,i)=><div key={n.id} className="card" style={{padding:'20px 22px',animationDelay:`${i*.07}s`}}>
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:10}}>
-        <h3 style={{fontSize:15,fontWeight:700,lineHeight:1.4,fontFamily:'Space Grotesk,sans-serif'}}>{n.title}</h3>
+        <h3 style={{fontSize:15,fontWeight:700,lineHeight:1.4,fontFamily:'inherit'}}>{n.title}</h3>
         <span className="tag" style={{flexShrink:0}}><Globe size={10}/>{n.source}</span>
       </div>
       <p style={{fontSize:13.5,color:'var(--tx2)',lineHeight:1.65,marginBottom:12}}>{n.content}</p>
@@ -682,20 +694,20 @@ function CampaignsTab({campaigns,user,onRefresh}:{campaigns:Campaign[];user:User
       <p className="sec">Campaigns</p>
       <button className="btn btn-green btn-sm" onClick={()=>setShow(true)}><Plus size={13}/>New</button>
     </div>
-    {show&&<div className="card" style={{padding:'20px 22px',borderColor:'rgba(74,222,128,0.28)'}}>
-      <p style={{fontWeight:700,marginBottom:14,color:'#4ade80',fontFamily:'Space Grotesk,sans-serif',fontSize:13}}>Create Campaign</p>
+    {show&&<div className="card" style={{padding:'20px 22px',borderColor:'rgba(123,92,255,0.28)'}}>
+      <p style={{fontWeight:700,marginBottom:14,color:'#7B5CFF',fontSize:13}}>Create Campaign</p>
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
         <input className="inp" placeholder="Campaign title" value={title} onChange={e=>setTitle(e.target.value)}/>
         <textarea className="inp" placeholder="What is this campaign about?" value={desc} onChange={e=>setDesc(e.target.value)} rows={3}/>
         <div style={{display:'flex',gap:8}}><button className="btn btn-green" onClick={create} disabled={loading}>{loading?'Creating...':'Create'}</button><button className="btn btn-ghost" onClick={()=>setShow(false)}>Cancel</button></div>
       </div>
     </div>}
-    {error&&<p style={{color:'#f87171',fontSize:12}}>{error}</p>}
+    {error&&<p style={{color:'#FF453A',fontSize:12}}>{error}</p>}
     {!campaigns.length&&<p style={{color:'var(--tx3)',textAlign:'center',padding:'50px 0'}}>No campaigns yet. Start one!</p>}
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:13}}>
       {campaigns.map(c=><div key={c.id} className="card" style={{padding:'18px 20px'}}>
         <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:10,marginBottom:10}}>
-          <h3 style={{fontSize:14,fontWeight:700,fontFamily:'Space Grotesk,sans-serif',lineHeight:1.35}}>{c.title}</h3>
+          <h3 style={{fontSize:14,fontWeight:700,lineHeight:1.35}}>{c.title}</h3>
           {isIn(c)&&<span className="badge b-green"><CheckCircle size={9}/>Joined</span>}
         </div>
         <p style={{fontSize:13,color:'var(--tx2)',lineHeight:1.55,marginBottom:14}}>{c.description}</p>
@@ -744,9 +756,9 @@ function GroupsTab({groups,user,onRefresh}:{groups:Group[];user:User;onRefresh:(
       <p className="sec">Community Groups</p>
       <button className="btn btn-green btn-sm" onClick={()=>setShow(true)}><Plus size={13}/>New Group</button>
     </div>
-    {error&&<p style={{color:'#f87171',fontSize:12}}>{error}</p>}
-    {show&&<div className="card" style={{padding:'20px 22px',borderColor:'rgba(74,222,128,0.28)'}}>
-      <p style={{fontWeight:700,marginBottom:14,color:'#4ade80',fontFamily:'Space Grotesk,sans-serif',fontSize:13}}>Create Group</p>
+    {error&&<p style={{color:'#FF453A',fontSize:12}}>{error}</p>}
+    {show&&<div className="card" style={{padding:'20px 22px',borderColor:'rgba(123,92,255,0.28)'}}>
+      <p style={{fontWeight:700,marginBottom:14,color:'#7B5CFF',fontSize:13}}>Create Group</p>
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
         <input className="inp" placeholder="Group name" value={name} onChange={e=>setName(e.target.value)}/>
         <input className="inp" placeholder="Environmental issue to address" value={issue} onChange={e=>setIssue(e.target.value)}/>
@@ -756,7 +768,7 @@ function GroupsTab({groups,user,onRefresh}:{groups:Group[];user:User;onRefresh:(
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:13}}>
       {groups.map(g=><div key={g.id} className="card" style={{padding:'18px 20px'}}>
         <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:10,marginBottom:8}}>
-          <h3 style={{fontSize:13.5,fontWeight:700,fontFamily:'Space Grotesk,sans-serif'}}>{g.name}</h3>
+          <h3 style={{fontSize:13.5,fontWeight:700,fontFamily:'inherit'}}>{g.name}</h3>
           {isMem(g)&&<span className="badge b-green"><CheckCircle size={9}/>Member</span>}
         </div>
         <p style={{fontSize:12.5,color:'var(--tx2)',marginBottom:12}}>{g.issue}</p>
@@ -770,8 +782,8 @@ function GroupsTab({groups,user,onRefresh}:{groups:Group[];user:User;onRefresh:(
 
     {activeG&&<div className="overlay" onClick={e=>{if(e.target===e.currentTarget)setActiveG(null)}}>
       <div className="modal" style={{height:520}}>
-        <div style={{padding:'16px 18px',borderBottom:'1px solid rgba(74,222,128,0.1)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
-          <div><p style={{fontWeight:700,fontFamily:'Space Grotesk,sans-serif',fontSize:14}}>{activeG.name}</p><p style={{fontSize:11,color:'var(--tx3)',marginTop:2}}>{activeG.issue}</p></div>
+        <div style={{padding:'16px 18px',borderBottom:'1px solid rgba(123,92,255,0.1)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+          <div><p style={{fontWeight:700,fontSize:14}}>{activeG.name}</p><p style={{fontSize:11,color:'var(--tx3)',marginTop:2}}>{activeG.issue}</p></div>
           <button onClick={()=>setActiveG(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',padding:4}}><X size={16}/></button>
         </div>
         <div ref={chatRef} className="chat-scroll">
@@ -779,10 +791,10 @@ function GroupsTab({groups,user,onRefresh}:{groups:Group[];user:User;onRefresh:(
           {msgs.map(m=><div key={m.id} style={{display:'flex',flexDirection:'column',alignItems:m.user.id===user.id?'flex-end':'flex-start',gap:3}}>
             <p style={{fontSize:9.5,color:'var(--tx3)',paddingInline:6}}>{m.user.name||'Anonymous'}</p>
             <div className={`bubble ${m.user.id===user.id?'b-me':'b-them'}`}>{m.content}</div>
-            <p style={{fontSize:9.5,color:'rgba(240,250,244,0.2)',paddingInline:6}}>{format(new Date(m.createdAt),'HH:mm')}</p>
+            <p style={{fontSize:9.5,color:'var(--tx3)',paddingInline:6}}>{format(new Date(m.createdAt),'HH:mm')}</p>
           </div>)}
         </div>
-        <div style={{padding:'12px 14px',borderTop:'1px solid rgba(74,222,128,0.08)',display:'flex',gap:10,flexShrink:0}}>
+        <div style={{padding:'12px 14px',borderTop:'1px solid rgba(123,92,255,0.08)',display:'flex',gap:10,flexShrink:0}}>
           <input className="inp" placeholder="Message..." value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&send()}/>
           <button className="btn btn-green" style={{padding:'0 16px',flexShrink:0}} onClick={send} disabled={sending}><Send size={14}/></button>
         </div>
@@ -812,12 +824,12 @@ function FundraisersTab({fundraisers,user,onRefresh,onToast}:{fundraisers:Fundra
       <p className="sec">Fundraisers</p>
       <button className="btn btn-green btn-sm" onClick={()=>setShow(true)}><Plus size={13}/>New Fundraiser</button>
     </div>
-    {show&&<div className="card" style={{padding:'20px 22px',borderColor:'rgba(74,222,128,0.28)'}}>
-      <p style={{fontWeight:700,marginBottom:14,color:'#4ade80',fontFamily:'Space Grotesk,sans-serif',fontSize:13}}>Start a Fundraiser</p>
+    {show&&<div className="card" style={{padding:'20px 22px',borderColor:'rgba(123,92,255,0.28)'}}>
+      <p style={{fontWeight:700,marginBottom:14,color:'#7B5CFF',fontSize:13}}>Start a Fundraiser</p>
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
         <input className="inp" placeholder="Cause title" value={cause} onChange={e=>setCause(e.target.value)}/>
         <textarea className="inp" placeholder="Describe the cause..." value={desc} onChange={e=>setDesc(e.target.value)} rows={3}/>
-        <div style={{position:'relative'}}><span style={{position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',color:'rgba(74,222,128,0.6)',fontSize:15}}>₹</span><input className="inp" style={{paddingLeft:30}} type="number" placeholder="Funding goal" value={goal} onChange={e=>setGoal(e.target.value)}/></div>
+        <div style={{position:'relative'}}><span style={{position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',color:'rgba(123,92,255,0.6)',fontSize:15}}>₹</span><input className="inp" style={{paddingLeft:30}} type="number" placeholder="Funding goal" value={goal} onChange={e=>setGoal(e.target.value)}/></div>
         <div style={{display:'flex',gap:8}}><button className="btn btn-green" onClick={create} disabled={loading}>{loading?'Creating...':'Launch'}</button><button className="btn btn-ghost" onClick={()=>setShow(false)}>Cancel</button></div>
       </div>
     </div>}
@@ -827,12 +839,12 @@ function FundraisersTab({fundraisers,user,onRefresh,onToast}:{fundraisers:Fundra
         const pct=Math.min(100,(f.raised/f.goal)*100)
         return <div key={f.id} className="card" style={{padding:'20px 22px',display:'flex',flexDirection:'column',gap:12}}>
           <div>
-            <h3 style={{fontSize:14.5,fontWeight:700,fontFamily:'Space Grotesk,sans-serif',marginBottom:6}}>{f.cause}</h3>
+            <h3 style={{fontSize:14.5,fontWeight:700,marginBottom:6}}>{f.cause}</h3>
             <p style={{fontSize:13,color:'var(--tx2)',lineHeight:1.55}}>{f.description}</p>
           </div>
           <div>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
-              <span className="val" style={{fontSize:20,color:'#4ade80',textShadow:'0 0 14px rgba(74,222,128,0.4)'}}>₹{f.raised.toLocaleString('en-IN')}</span>
+              <span className="val" style={{fontSize:20,color:'#7B5CFF'}}>₹{f.raised.toLocaleString('en-IN')}</span>
               <span style={{fontSize:12,color:'var(--tx3)'}}>of ₹{f.goal.toLocaleString('en-IN')}</span>
             </div>
             <div className="prog"><div className="prog-fill" style={{width:`${pct}%`}}/></div>
@@ -906,40 +918,40 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
     {k:'fundraisers',l:'Fundraisers',i:<HeartHandshake size={15}/>,c:fundraisers.length},
   ]
 
-  const roleColor:Record<string,string>={admin:'#f87171',analyst:'#22d3ee',public:'#4ade80',technician:'#fb923c'}
-  const rc=roleColor[user.role]||'#4ade80'
+  const roleColor:Record<string,string>={admin:'#FF453A',analyst:'#6C8CFF',public:'#30D158',technician:'#FF5C7A'}
+  const rc=roleColor[user.role]||'#7B5CFF'
 
   return <div style={{display:'flex',minHeight:'100vh',position:'relative'}}>
     <div className="noise"/><div className="glow-orb orb1"/><div className="glow-orb orb2"/><div className="glow-orb orb3"/>
 
     {/* Sidebar */}
-    <aside style={{width:sideOpen?220:58,flexShrink:0,position:'sticky',top:0,height:'100vh',background:'rgba(8,14,22,0.95)',borderRight:'1px solid rgba(74,222,128,0.09)',display:'flex',flexDirection:'column',zIndex:10,transition:'width .22s ease',backdropFilter:'blur(24px)'}}>
+    <aside style={{width:sideOpen?220:58,flexShrink:0,position:'sticky',top:0,height:'100vh',background:'linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))',backdropFilter:'blur(34px) saturate(175%)',WebkitBackdropFilter:'blur(34px) saturate(175%)',borderRight:'1px solid rgba(255,255,255,0.08)',display:'flex',flexDirection:'column',zIndex:10,transition:'width .22s ease'}}>
       {/* Logo */}
-      <div style={{padding:'20px 12px 16px',borderBottom:'1px solid rgba(74,222,128,0.07)'}}>
+      <div style={{padding:'18px 12px 16px',borderBottom:'1px solid var(--b1)'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <div style={{width:34,height:34,flexShrink:0,borderRadius:10,background:'rgba(74,222,128,0.1)',border:'1px solid rgba(74,222,128,0.3)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 14px rgba(74,222,128,0.18)'}}>
-            <Leaf size={15} color="#4ade80"/>
+          <div style={{width:34,height:34,flexShrink:0,borderRadius:9,background:'var(--brand-grad)',color:'#FFFFFF',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <Logo size={19}/>
           </div>
-          {sideOpen&&<div><p style={{fontFamily:'Space Grotesk,sans-serif',fontSize:13,fontWeight:700,color:'#4ade80',letterSpacing:'0.06em',textShadow:'0 0 12px rgba(74,222,128,0.35)'}}>EarthPulse</p><p style={{fontSize:9.5,color:'var(--tx3)',letterSpacing:'0.06em'}}>ENV MONITOR</p></div>}
+          {sideOpen&&<div style={{lineHeight:1.2}}><p className="brand-text" style={{fontSize:15,fontWeight:600,letterSpacing:"-0.02em"}}>EarthPulse</p><p style={{fontSize:11.5,color:'var(--tx3)',fontWeight:450}}>Environment Monitor</p></div>}
         </div>
       </div>
 
       <nav style={{flex:1,padding:'10px 8px',overflowY:'auto',display:'flex',flexDirection:'column',gap:3}}>
-        {sideOpen&&<p style={{fontFamily:'Space Grotesk,sans-serif',fontSize:9.5,color:'var(--tx3)',letterSpacing:'0.18em',textTransform:'uppercase',padding:'6px 10px',marginBottom:2}}>Menu</p>}
+        {sideOpen&&<p style={{fontSize:9.5,color:'var(--tx3)',letterSpacing:'0.18em',textTransform:'uppercase',padding:'6px 10px',marginBottom:2}}>Menu</p>}
         {nav.map(n=><div key={n.k} className={`nav-link ${tab===n.k?'on':''}`} onClick={()=>setTab(n.k as Tab)} title={!sideOpen?n.l:undefined} style={{justifyContent:sideOpen?'flex-start':'center',padding:sideOpen?'9px 12px':'9px 0'}}>
           {n.i}
-          {sideOpen&&<><span style={{flex:1}}>{n.l}</span>{n.c!=null&&<span className="val" style={{fontSize:10,color:'rgba(240,250,244,0.3)',background:'rgba(74,222,128,0.07)',padding:'1px 6px',borderRadius:10}}>{n.c}</span>}</>}
+          {sideOpen&&<><span style={{flex:1}}>{n.l}</span>{n.c!=null&&<span className="val" style={{fontSize:10,color:'var(--tx3)',background:'rgba(123,92,255,0.07)',padding:'1px 6px',borderRadius:10}}>{n.c}</span>}</>}
         </div>)}
       </nav>
 
-      <div style={{padding:'10px 8px',borderTop:'1px solid rgba(74,222,128,0.07)'}}>
-        {sideOpen&&<div style={{display:'flex',alignItems:'center',gap:9,padding:'9px 11px',borderRadius:10,background:'rgba(74,222,128,0.04)',border:'1px solid rgba(74,222,128,0.07)',marginBottom:9}}>
+      <div style={{padding:'10px 8px',borderTop:'1px solid rgba(123,92,255,0.07)'}}>
+        {sideOpen&&<div style={{display:'flex',alignItems:'center',gap:9,padding:'9px 11px',borderRadius:10,background:'rgba(123,92,255,0.04)',border:'1px solid rgba(123,92,255,0.07)',marginBottom:9}}>
           <div style={{width:28,height:28,borderRadius:'50%',background:`${rc}18`,border:`1px solid ${rc}30`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><UserCircle size={14} color={rc}/></div>
           <div style={{overflow:'hidden',flex:1}}>
             <p style={{fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name||user.email}</p>
             <p style={{fontSize:9.5,color:rc,textTransform:'uppercase',letterSpacing:'0.06em'}}>{user.role}</p>
           </div>
-          {user.isVerified&&<CheckCircle size={12} color="#4ade80"/>}
+          {user.isVerified&&<CheckCircle size={12} color="#30D158"/>}
         </div>}
         <div style={{display:'flex',gap:6}}>
           <button onClick={()=>setSideOpen(p=>!p)} className="btn btn-ghost btn-xs" style={{padding:'7px 10px',flex:sideOpen?'none':1}}>{sideOpen?'◁':'▷'}</button>
@@ -951,15 +963,15 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
     {/* Main */}
     <main style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',position:'relative',zIndex:1}}>
       {/* Header */}
-      <header style={{padding:'13px 26px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid rgba(74,222,128,0.07)',background:'rgba(7,13,20,0.7)',backdropFilter:'blur(16px)',flexShrink:0}}>
+      <header style={{padding:'14px 26px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--b1)',background:'linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.015))',backdropFilter:'blur(34px) saturate(175%)',WebkitBackdropFilter:'blur(34px) saturate(175%)',flexShrink:0,position:'sticky',top:0,zIndex:50}}>
         <div>
-          <h1 style={{fontSize:15.5,fontWeight:700,fontFamily:'Space Grotesk,sans-serif'}}>{nav.find(n=>n.k===tab)?.l}</h1>
+          <h1 style={{fontSize:15.5,fontWeight:700,fontFamily:'inherit'}}>{nav.find(n=>n.k===tab)?.l}</h1>
           <p className="val" style={{fontSize:11,color:'var(--tx3)',marginTop:1}}>{format(new Date(),'EEEE, MMMM d · HH:mm')}</p>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:14}}>
           <div style={{display:'flex',alignItems:'center',gap:6}}>
             <span className="dot dot-green"/>
-            <span className="val" style={{fontSize:11,color:'rgba(74,222,128,0.7)'}}>LIVE</span>
+            <span className="val" style={{fontSize:11,color:'rgba(123,92,255,0.7)'}}>LIVE</span>
           </div>
           <button className="btn btn-ghost btn-xs" onClick={load} disabled={refreshing} style={{display:'flex',alignItems:'center',gap:5}}>
             <RefreshCw size={12} style={{animation:refreshing?'spin 1s linear infinite':'none'}}/>{refreshing?'Syncing':'Refresh'}
@@ -997,15 +1009,15 @@ export default function Dashboard() {
     setReady(true)
   },[])
 
-  if(!ready) return <div style={{background:'var(--bg)',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center'}}><div style={{width:40,height:40,borderRadius:'50%',border:'2px solid rgba(74,222,128,0.2)',borderTopColor:'#4ade80',animation:'spin 0.8s linear infinite'}}/><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style></div>
+  if(!ready) return <div style={{background:'var(--bg)',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center'}}><div style={{width:40,height:40,borderRadius:'50%',border:'2px solid rgba(123,92,255,0.2)',borderTopColor:'#7B5CFF',animation:'spin 0.8s linear infinite'}}/><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style></div>
 
   if(!user) return <>
     <AuthScreen onAuth={(u,t,msg)=>{setUser(u);if(msg)setToast(msg)}}/>
-    {toast&&<div className="toast" style={{zIndex:999}}><CheckCircle size={16} color="#4ade80"/><span style={{fontSize:13}}>{toast}</span><button onClick={()=>setToast('')} style={{background:'none',border:'none',cursor:'pointer',color:'rgba(240,250,244,0.4)'}}><X size={13}/></button></div>}
+    {toast&&<div className="toast" style={{zIndex:999}}><CheckCircle size={16} color="#30D158"/><span style={{fontSize:13}}>{toast}</span><button onClick={()=>setToast('')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)'}}><X size={13}/></button></div>}
   </>
 
   return <>
     <AppShell user={user} onLogout={()=>{localStorage.removeItem('user');localStorage.removeItem('token');setUser(null)}}/>
-    {toast&&<div className="toast"><CheckCircle size={16} color="#4ade80"/><span style={{fontSize:13}}>{toast}</span><button onClick={()=>setToast('')} style={{background:'none',border:'none',cursor:'pointer',color:'rgba(240,250,244,0.4)'}}><X size={13}/></button></div>}
+    {toast&&<div className="toast"><CheckCircle size={16} color="#30D158"/><span style={{fontSize:13}}>{toast}</span><button onClick={()=>setToast('')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)'}}><X size={13}/></button></div>}
   </>
 }
