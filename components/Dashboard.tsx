@@ -416,19 +416,7 @@ function Overview({sensors}:{sensors:Sensor[]}) {
       </p>
     </aside>}
 
-    {/* Place chips, bottom-left over the globe. */}
-    <div className="globe-chips">
-      {allPlaces.map(p=>{
-        const on=p.key===sel
-        const isHere=p.key===HERE_KEY
-        return <button key={p.key} onClick={()=>setSel(p.key)} className={`chip${on?' on':''}`}>
-          {isHere
-            ? <Navigation size={11} style={{color:'#FFFFFF'}}/>
-            : <span className="dot" style={{background:sColor(p.sensors[0]?.type??''),animation:'none',width:6,height:6}}/>}
-          {p.name}
-        </button>
-      })}
-    </div>
+
   </div>
 }
 

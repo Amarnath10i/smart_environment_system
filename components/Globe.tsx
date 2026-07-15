@@ -14,7 +14,7 @@ export type GlobeMarker = {
 const R = 1
 /** Camera distances: FAR = whole globe in frame, NEAR = zoomed onto a place. */
 const FAR = 3.75
-const NEAR = 2.45
+const NEAR = 2.85
 const MIN_DIST = 1.55
 const MAX_DIST = 5.5
 
@@ -165,6 +165,16 @@ export function Globe({
       fragmentShader: `
         uniform sampler2D uDay; uniform sampler2D uNight; uniform vec3 uSun;
         varying vec2 vUv; varying vec3 vNormal;
+
+        // ACES filmic curve. Straight gain clipped snow and cloud to flat white
+        // and drove the deserts neon; this rolls the highlights off instead of
+        // hitting the ceiling, which is what makes the reference look shot
+        // rather than rendered.
+        vec3 aces(vec3 x){
+          const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+          return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+        }
+
         void main(){
           float sun = dot(normalize(vNormal), normalize(uSun));
           // Wide smoothstep = a dusk band rather than a hard day/night line.
@@ -172,12 +182,14 @@ export function Globe({
           vec3 day = texture2D(uDay, vUv).rgb;
           vec3 night = texture2D(uNight, vUv).rgb;
           // Lights fade out as dawn arrives instead of vanishing abruptly.
-          vec3 lights = night * (1.0 - t) * 1.25;
-          // Lift and saturate: Blue Marble is flat and dim next to the reference.
-          vec3 lit = day * clamp(t, 0.02, 1.0) * 1.5;
+          vec3 lights = night * (1.0 - t) * 1.1;
+
+          vec3 lit = day * clamp(t, 0.02, 1.0) * 1.15;
+          // Gentle saturation only — 1.35 turned Arabia fluorescent.
           float lum = dot(lit, vec3(0.2126, 0.7152, 0.0722));
-          lit = mix(vec3(lum), lit, 1.35);
-          gl_FragColor = vec4(lit + lights, 1.0);
+          lit = mix(vec3(lum), lit, 1.12);
+
+          gl_FragColor = vec4(aces(lit + lights), 1.0);
         }
       `,
     })
@@ -245,7 +257,7 @@ export function Globe({
             float a = texture2D(uClouds, vUv).r;
             float sun = dot(normalize(vNormal), normalize(uSun));
             float lit = smoothstep(-0.18, 0.32, sun);
-            gl_FragColor = vec4(vec3(1.0) * (0.35 + lit * 0.65), a * lit * 0.72);
+            gl_FragColor = vec4(vec3(0.92) * (0.4 + lit * 0.6), a * lit * 0.44);
           }
         `,
       }),
@@ -283,43 +295,51 @@ export function Globe({
     )
     root.add(atmosphere)
 
-    // ---- Markers
+    /**
+     * A single marker: the selected place, and nothing else.
+     *
+     * Scattering a dot on every monitored site turned the Earth into a map
+     * legend. One small blinking point is the whole idea — you are here.
+     */
     const markerGroup = new THREE.Group()
     earth.add(markerGroup)
     const dots: THREE.Mesh[] = []
-    const rebuildMarkers = () => {
-      while (markerGroup.children.length) markerGroup.remove(markerGroup.children[0])
-      dots.length = 0
-      for (const m of markersRef.current) {
-        const pos = latLonToVec3(m.lat, m.lon, R * 1.008)
-        const dot = new THREE.Mesh(
-          new THREE.SphereGeometry(0.017, 16, 16),
-          new THREE.MeshBasicMaterial({ color: new THREE.Color(m.color) }),
-        )
-        dot.position.copy(pos)
-        dot.userData.id = m.id
-        markerGroup.add(dot)
-        dots.push(dot)
 
-        // Halo faces outward so it reads as a ring on the surface.
-        const halo = new THREE.Mesh(
-          new THREE.RingGeometry(0.026, 0.05, 32),
-          new THREE.MeshBasicMaterial({
-            color: new THREE.Color(m.color),
-            transparent: true,
-            opacity: 0.42,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-          }),
-        )
-        halo.position.copy(pos)
-        halo.lookAt(pos.clone().multiplyScalar(2))
-        halo.userData.pulse = true
-        halo.userData.id = m.id
-        markerGroup.add(halo)
-      }
+    const dot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.0055, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0xffffff }),
+    )
+    markerGroup.add(dot)
+    dots.push(dot)
+
+    // Ring faces outward, so it reads as painted on the surface.
+    const halo = new THREE.Mesh(
+      new THREE.RingGeometry(0.009, 0.014, 48),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.5,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    )
+    markerGroup.add(halo)
+
+    /** Moves the one marker to whichever place is selected. */
+    const placeMarker = () => {
+      const m = markersRef.current.find((x) => x.id === selIdRef.current) ?? markersRef.current[0]
+      if (!m) { markerGroup.visible = false; return }
+      markerGroup.visible = true
+      const pos = latLonToVec3(m.lat, m.lon, R * 1.02)
+      dot.position.copy(pos)
+      dot.userData.id = m.id
+      halo.position.copy(pos)
+      halo.lookAt(pos.clone().multiplyScalar(2))
+      const c = new THREE.Color(m.color)
+      ;(dot.material as THREE.MeshBasicMaterial).color = c
+      ;(halo.material as THREE.MeshBasicMaterial).color = c
     }
-    rebuildMarkers()
+    placeMarker()
 
     // ---- Interaction
     const ray = new THREE.Raycaster()
@@ -449,18 +469,15 @@ export function Globe({
       earth.rotation.y = rot.y
       camera.position.z += (camRef.current.dist - camera.position.z) * 0.16
 
-      // Only the selected place blinks; the rest sit quiet so the eye is drawn
-      // to one point rather than to every marker at once.
+      // The one marker follows the selection and blinks.
+      placeMarker()
       const t = performance.now()
-      for (const c of markerGroup.children) {
-        const mesh = c as THREE.Mesh
-        if (!mesh.userData.pulse) continue
-        const on = mesh.userData.id === selIdRef.current
-        const mat = mesh.material as THREE.MeshBasicMaterial
-        mat.opacity = reduced ? (on ? 0.55 : 0.16) : on ? 0.3 + Math.abs(Math.sin(t / 560)) * 0.55 : 0.14
-        const s = on && !reduced ? 1 + Math.abs(Math.sin(t / 560)) * 0.5 : 1
-        mesh.scale.setScalar(s)
-      }
+      const beat = Math.abs(Math.sin(t / 620))
+      const haloMat = halo.material as THREE.MeshBasicMaterial
+      haloMat.opacity = reduced ? 0.5 : 0.2 + beat * 0.55
+      halo.scale.setScalar(reduced ? 1 : 1 + beat * 0.55)
+      ;(dot.material as THREE.MeshBasicMaterial).opacity = 1
+      dot.scale.setScalar(reduced ? 1 : 0.95 + beat * 0.15)
 
       renderer.render(scene, camera)
     }

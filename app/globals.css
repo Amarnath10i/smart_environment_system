@@ -477,14 +477,6 @@ textarea.inp { resize: vertical; min-height: 80px; line-height: 1.5; }
 }
 
 
-/* Chips ride over the globe, bottom-left, as floating glass. */
-.globe-chips {
-  position: absolute;
-  left: 32px; bottom: 24px; right: 32px;
-  z-index: 2;
-  display: flex; flex-wrap: wrap; gap: 7px;
-  pointer-events: none;
-}
 .chip {
   pointer-events: auto;
   display: inline-flex; align-items: center; gap: 7px;
