@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/api-auth'
+import { publish } from '@/lib/events'
 import { campaignSchema, paginationSchema, parseBody, parseQuery } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
@@ -44,6 +45,9 @@ export async function POST(request: NextRequest) {
       data: { ...parsed.data, creatorId: auth.user.id },
       include: { creator: { select: { id: true, name: true } } },
     })
+
+    publish({ type: 'campaign:new', audience: 'public', payload: { id: campaign.id, title: campaign.title } })
+
     return NextResponse.json(campaign, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Failed to create campaign' }, { status: 500 })

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireRole } from '@/lib/api-auth'
+import { publish } from '@/lib/events'
 import { parseBody, parseQuery, sensorDataSchema } from '@/lib/validation'
 import { z } from 'zod'
 
@@ -47,6 +48,13 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await prisma.sensorData.create({ data: { sensorId, value } })
+
+    publish({
+      type: 'sensor:data',
+      audience: 'public',
+      payload: { sensorId, value, timestamp: data.timestamp.toISOString() },
+    })
+
     return NextResponse.json(data, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Failed to create data' }, { status: 500 })

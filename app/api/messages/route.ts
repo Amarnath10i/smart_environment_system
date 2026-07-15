@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/api-auth'
+import { publish } from '@/lib/events'
 import { messageQuerySchema, messageSchema, parseBody, parseQuery } from '@/lib/validation'
 
 /** True when `userId` is the creator of, or a member of, `groupId`. */
@@ -75,6 +76,19 @@ export async function POST(request: NextRequest) {
       data: { content, groupId, userId: auth.user.id },
       include: { user: { select: { id: true, name: true } } },
     })
+
+    publish({
+      type: 'message:new',
+      audience: { groupId },
+      payload: {
+        id: message.id,
+        groupId,
+        content: message.content,
+        createdAt: message.createdAt.toISOString(),
+        user: message.user,
+      },
+    })
+
     return NextResponse.json(message, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Failed to send message' }, { status: 500 })

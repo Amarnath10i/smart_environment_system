@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/api-auth'
+import { publish } from '@/lib/events'
 import { donationSchema, parseBody } from '@/lib/validation'
 
 export async function POST(request: NextRequest) {
@@ -40,6 +41,20 @@ export async function POST(request: NextRequest) {
     if (!result) {
       return NextResponse.json({ error: 'Fundraiser not found' }, { status: 404 })
     }
+
+    // After commit, never inside the transaction: a rollback would otherwise
+    // broadcast a donation that did not happen. Amount and totals only -- the
+    // donor is not named, since this fans out to every connected client.
+    publish({
+      type: 'donation:new',
+      audience: 'public',
+      payload: {
+        fundraiserId: result.fundraiser.id,
+        amount: result.donation.amount,
+        raised: result.fundraiser.raised,
+        goal: result.fundraiser.goal,
+      },
+    })
 
     return NextResponse.json({ success: true, ...result }, { status: 201 })
   } catch {

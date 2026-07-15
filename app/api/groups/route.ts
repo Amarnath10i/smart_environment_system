@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/api-auth'
+import { publish } from '@/lib/events'
 import { groupSchema, paginationSchema, parseBody, parseQuery } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
@@ -48,6 +49,9 @@ export async function POST(request: NextRequest) {
       },
       include: { creator: { select: { id: true, name: true } } },
     })
+
+    publish({ type: 'group:new', audience: 'public', payload: { id: group.id, name: group.name } })
+
     return NextResponse.json(group, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Failed to create group' }, { status: 500 })

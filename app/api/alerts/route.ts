@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireRole } from '@/lib/api-auth'
+import { publish } from '@/lib/events'
 import { alertSchema, parseBody } from '@/lib/validation'
 
 /** Alerts are public: the dashboard shows them to anonymous visitors. */
@@ -40,6 +41,13 @@ export async function POST(request: NextRequest) {
     const alert = await prisma.alert.create({
       data: { type, message, ...(sensorId ? { sensorId } : {}) },
     })
+
+    publish({
+      type: 'alert:new',
+      audience: 'public',
+      payload: { id: alert.id, type: alert.type, message: alert.message },
+    })
+
     return NextResponse.json(alert, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Failed to create alert' }, { status: 500 })
