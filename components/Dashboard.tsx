@@ -324,7 +324,7 @@ const HERE_KEY='__here__'
 
 type Place = { key:string; name:string; city:string; lat:number; lon:number; sensors:Sensor[] }
 
-function Overview({sensors,onRefresh,refreshing}:{sensors:Sensor[];onRefresh:()=>void;refreshing:boolean}) {
+function Overview({sensors}:{sensors:Sensor[]}) {
   // Group by physical place: the globe plots locations, not sensor rows, and a
   // city usually carries more than one instrument.
   const places = useMemo(()=>{
@@ -429,12 +429,7 @@ function Overview({sensors,onRefresh,refreshing}:{sensors:Sensor[];onRefresh:()=
       </p>
     </aside>}
 
-    {/* Refresh, top-right over the globe — the page header it used to sit in is
-        hidden on this tab. */}
-    <button className="btn btn-ghost btn-xs globe-refresh" onClick={onRefresh} disabled={refreshing}>
-      <RefreshCw size={12} style={{animation:refreshing?'spin 1s linear infinite':'none'}}/>
-      {refreshing?'Syncing':'Refresh'}
-    </button>
+    {/* Refresh is not here: the page renders one floating control for every tab. */}
 
     {/* Imagery credit — required by the NASA and Esri licences. */}
     <p className="globe-credit">NASA EOSDIS GIBS · Esri, Maxar, Earthstar Geographics</p>
@@ -850,17 +845,19 @@ function NewsTab({news,live,fetchedAt}:{news:NewsItem[];live:boolean;fetchedAt:s
 
   return <div className="anim-up" style={{display:'flex',flexDirection:'column',gap:13}}>
     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
-      <div style={{display:'flex',alignItems:'center',gap:10}}>
+      {/* All on the left: the floating Refresh occupies the top right, and
+          anything here would sit underneath it.
+          No Refresh of its own either -- the page's one force-refetches on this
+          tab, so a second would be duplication. */}
+      <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
         <p className="sec" style={{margin:0}}>Environmental News</p>
         {/* Says plainly whether these are live articles or the stored fallback,
             so a reader is never misled about how current the page is. */}
         {live
           ? <span className="badge b-green"><span className="dot dot-green"/>live</span>
           : <span className="badge b-red">offline · stored</span>}
+        {fetchedAt&&<span className="val" style={{fontSize:10.5,color:'var(--tx3)'}}>updated {ago(fetchedAt)}</span>}
       </div>
-      {/* No Refresh button here: the page header already has one, and on this
-          tab it force-refetches the feeds. A second one was pure duplication. */}
-      {fetchedAt&&<span className="val" style={{fontSize:10.5,color:'var(--tx3)'}}>updated {ago(fetchedAt)}</span>}
     </div>
 
     {/* Filter by publisher. */}
@@ -948,7 +945,9 @@ function CampaignsTab({campaigns,user,onRefresh}:{campaigns:Campaign[];user:User
   const isIn=(c:Campaign)=>c.participants.some(p=>p.id===user.id)||c.creator.id===user.id
 
   return <div className="anim-up" style={{display:'flex',flexDirection:'column',gap:16}}>
-    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+    {/* paddingRight reserves the corner for the page's floating Refresh, which
+        this row's right-hand button would otherwise sit underneath. */}
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',paddingRight:46}}>
       <p className="sec">Campaigns</p>
       <button className="btn btn-green btn-sm" onClick={()=>setShow(true)}><Plus size={13}/>New</button>
     </div>
@@ -1010,7 +1009,8 @@ function GroupsTab({groups,user,onRefresh}:{groups:Group[];user:User;onRefresh:(
   },true,streamKey)
 
   return <div className="anim-up" style={{display:'flex',flexDirection:'column',gap:16}}>
-    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+    {/* paddingRight reserves the corner for the page's floating Refresh. */}
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',paddingRight:46}}>
       <p className="sec">Community Groups</p>
       <button className="btn btn-green btn-sm" onClick={()=>setShow(true)}><Plus size={13}/>New Group</button>
     </div>
@@ -1079,7 +1079,8 @@ function FundraisersTab({fundraisers,user,onRefresh,onToast}:{fundraisers:Fundra
   }
 
   return <div className="anim-up" style={{display:'flex',flexDirection:'column',gap:16}}>
-    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+    {/* paddingRight reserves the corner for the page's floating Refresh. */}
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',paddingRight:46}}>
       <p className="sec">Fundraisers</p>
       <button className="btn btn-green btn-sm" onClick={()=>setShow(true)}><Plus size={13}/>New Fundraiser</button>
     </div>
@@ -1174,14 +1175,15 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
 
   const showToast=(msg:string,type:'ok'|'err'|'info')=>setToast({msg,type})
 
+  // No counts: the sidebar carries labels only.
   const nav=[
     {k:'overview',l:'Home',i:<LayoutDashboard size={15}/>},
-    {k:'sensors',l:'Sensors',i:<Radio size={15}/>,c:sensors.length},
+    {k:'sensors',l:'Sensors',i:<Radio size={15}/>},
     {k:'analytics',l:'Analytics',i:<BarChart3 size={15}/>},
-    {k:'news',l:'News',i:<Newspaper size={15}/>,c:news.length},
-    {k:'campaigns',l:'Campaigns',i:<Megaphone size={15}/>,c:campaigns.length},
-    {k:'groups',l:'Groups',i:<Users size={15}/>,c:groups.length},
-    {k:'fundraisers',l:'Fundraisers',i:<HeartHandshake size={15}/>,c:fundraisers.length},
+    {k:'news',l:'News',i:<Newspaper size={15}/>},
+    {k:'campaigns',l:'Campaigns',i:<Megaphone size={15}/>},
+    {k:'groups',l:'Groups',i:<Users size={15}/>},
+    {k:'fundraisers',l:'Fundraisers',i:<HeartHandshake size={15}/>},
   ]
 
   const roleColor:Record<string,string>={admin:'#FF453A',analyst:'#6C8CFF',public:'#30D158',technician:'#FF5C7A'}
@@ -1191,7 +1193,9 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
     <div className="noise"/><div className="glow-orb orb1"/><div className="glow-orb orb2"/><div className="glow-orb orb3"/>
 
     {/* Sidebar */}
-    <aside style={{width:sideOpen?220:58,flexShrink:0,position:'sticky',top:0,height:'100vh',background:'linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.006))',backdropFilter:'blur(44px) saturate(190%)',WebkitBackdropFilter:'blur(44px) saturate(190%)',borderRight:'1px solid rgba(255,255,255,0.055)',display:'flex',flexDirection:'column',zIndex:10,transition:'width .22s ease'}}>
+    {/* Liquid glass: the tint is in .sidebar-glass so the whole surface can be
+        styled in one place rather than inline. */}
+    <aside className="sidebar-glass" style={{width:sideOpen?220:58,flexShrink:0,position:'sticky',top:0,height:'100vh',display:'flex',flexDirection:'column',zIndex:10,transition:'width .22s ease'}}>
       {/* Logo */}
       <div style={{padding:'18px 12px 16px',borderBottom:'1px solid var(--b1)'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
@@ -1206,7 +1210,8 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
         {sideOpen&&<p style={{fontSize:9.5,color:'var(--tx3)',letterSpacing:'0.18em',textTransform:'uppercase',padding:'6px 10px',marginBottom:2}}>Menu</p>}
         {nav.map(n=><div key={n.k} className={`nav-link ${tab===n.k?'on':''}`} onClick={()=>setTab(n.k as Tab)} title={!sideOpen?n.l:undefined} style={{justifyContent:sideOpen?'flex-start':'center',padding:sideOpen?'9px 12px':'9px 0'}}>
           {n.i}
-          {sideOpen&&<><span style={{flex:1}}>{n.l}</span>{n.c!=null&&<span className="val" style={{fontSize:10,color:'var(--tx3)',background:'rgba(123,92,255,0.07)',padding:'1px 6px',borderRadius:10}}>{n.c}</span>}</>}
+          {/* No count badges: the numbers were noise next to the labels. */}
+          {sideOpen&&<span style={{flex:1}}>{n.l}</span>}
         </div>)}
       </nav>
 
@@ -1228,32 +1233,27 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
 
     {/* Main */}
     <main style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',position:'relative',zIndex:1}}>
-      {/* Header — hidden on Home, where the globe runs full-bleed and carries
-          its own refresh control instead. */}
-      {tab!=='overview'&&<header style={{padding:'14px 26px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--b1)',background:'linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.008))',backdropFilter:'blur(44px) saturate(190%)',WebkitBackdropFilter:'blur(44px) saturate(190%)',flexShrink:0,position:'sticky',top:0,zIndex:50}}>
-        <div>
-          <h1 style={{fontSize:15.5,fontWeight:700,fontFamily:'inherit'}}>{nav.find(n=>n.k===tab)?.l}</h1>
-          <p className="val" style={{fontSize:11,color:'var(--tx3)',marginTop:1}}>{format(new Date(),'EEEE, MMMM d · HH:mm')}</p>
-        </div>
-        <div style={{display:'flex',alignItems:'center',gap:14}}>
-          <div style={{display:'flex',alignItems:'center',gap:6}}>
-            <span className="dot dot-green"/>
-            <span className="val" style={{fontSize:11,color:'rgba(123,92,255,0.7)'}}>LIVE</span>
-          </div>
-          {/* On News this forces a refetch past the 10-minute feed cache, which
-              is what a reader means by Refresh there; elsewhere it would only
-              pester the publishers, so it stays cached.
-              Wrapped, not passed bare: onClick hands the button a MouseEvent,
-              which as load's first arg would read as freshNews=true. */}
-          <button className="btn btn-ghost btn-xs" onClick={()=>load(tab==='news')} disabled={refreshing} style={{display:'flex',alignItems:'center',gap:5}}>
-            <RefreshCw size={12} style={{animation:refreshing?'spin 1s linear infinite':'none'}}/>{refreshing?'Syncing':'Refresh'}
-          </button>
-        </div>
-      </header>}
+      {/* No page header on any tab: it only restated the tab name the sidebar
+          already highlights. Refresh floats over the page instead, and the tab
+          content starts at the top. */}
 
-      {/* Content — Home is full-bleed so the globe reaches every edge. */}
-      <div style={{flex:1,overflowY:tab==='overview'?'hidden':'auto',padding:tab==='overview'?0:'22px 26px'}}>
-        {tab==='overview'&&<Overview sensors={sensors} onRefresh={()=>load()} refreshing={refreshing}/>}
+      {/* Content — Home is full-bleed so the globe reaches every edge.
+          position:relative anchors the floating Refresh below. */}
+      <div style={{flex:1,overflowY:tab==='overview'?'hidden':'auto',padding:tab==='overview'?0:'22px 26px',position:'relative'}}>
+        {/* One Refresh for every tab, floating in the page space.
+            On News it forces a refetch past the 10-minute feed cache, which is
+            what a reader means by Refresh there; elsewhere that would only
+            pester the publishers, so it stays cached.
+            Wrapped, not passed bare: onClick hands the button a MouseEvent,
+            which as load's first arg would read as freshNews=true. */}
+        {/* Icon only. aria-label/title carry the meaning the text used to --
+            without them this is an unlabelled button to a screen reader. */}
+        <button className="btn btn-ghost btn-xs page-refresh" onClick={()=>load(tab==='news')} disabled={refreshing}
+          aria-label={refreshing?'Syncing':'Refresh'} title={refreshing?'Syncing':'Refresh'}>
+          <RefreshCw size={14} style={{animation:refreshing?'spin 1s linear infinite':'none'}}/>
+        </button>
+
+        {tab==='overview'&&<Overview sensors={sensors}/>}
         {tab==='sensors'&&<Sensors sensors={sensors} onRefresh={()=>load()}/>}
         {tab==='analytics'&&<Analytics sensors={sensors}/>}
         {tab==='news'&&<NewsTab news={news} live={newsLive} fetchedAt={newsFetchedAt}/>}

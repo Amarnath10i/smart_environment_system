@@ -445,15 +445,40 @@ textarea.inp { resize: vertical; min-height: 80px; line-height: 1.5; }
   background: #04050A;
 }
 
-/* Refresh, floating top-right over the globe. */
-.globe-refresh {
+/* Sidebar: liquid glass. Barely-there tint plus a heavy blur, so the page's
+   colour and the glow orbs read through it rather than sitting behind a panel.
+   The highlight down the inner edge is what makes it look like a pane of glass
+   catching light rather than a flat translucent rectangle. */
+.sidebar-glass {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.014) 45%, rgba(255,255,255,0.028) 100%);
+  backdrop-filter: blur(52px) saturate(200%);
+  -webkit-backdrop-filter: blur(52px) saturate(200%);
+  border-right: 1px solid rgba(255,255,255,0.07);
+  /* Inner highlight left, soft depth right. */
+  box-shadow:
+    inset 1px 0 0 rgba(255,255,255,0.06),
+    inset -1px 0 0 rgba(0,0,0,0.18);
+}
+
+/* Refresh: one icon-only control, floating top-right over every tab. Replaces
+   the per-page header bar, so it sits above the content it overlaps. */
+.page-refresh {
   position: absolute;
-  top: 26px;
-  right: 26px;
-  z-index: 5;
+  top: 20px;
+  right: 24px;
+  z-index: 40;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  /* Square: with no label, equal padding keeps the glyph centred. */
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
+@media (pointer: coarse) {
+  /* Touch targets stay at 44px, as everywhere else. */
+  .page-refresh { width: 44px; height: 44px; }
 }
 
 /* Readout in the black corner the globe's offset leaves free. Text on space —
