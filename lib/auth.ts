@@ -10,6 +10,17 @@ export type TokenPayload = {
 
 const TOKEN_TTL = '7d'
 
+const ROLES: readonly Role[] = ['admin', 'analyst', 'public', 'technician']
+
+/**
+ * Narrows the free-form role column to a known Role. SQLite has no enum, so a
+ * row can hold anything; an unrecognised value falls back to the least
+ * privileged role rather than being trusted as-is.
+ */
+export function toRole(value: string): Role {
+  return (ROLES as readonly string[]).includes(value) ? (value as Role) : 'public'
+}
+
 /**
  * Refuses a guessable secret. This previously defaulted to the literal string
  * 'secret', which let anyone mint a valid admin token.
@@ -42,7 +53,7 @@ export function verifyToken(token: string): TokenPayload | null {
     const { id, email, role } = decoded as Record<string, unknown>
     if (typeof id !== 'number' || typeof email !== 'string' || typeof role !== 'string') return null
 
-    return { id, email, role: role as Role }
+    return { id, email, role: toRole(role) }
   } catch {
     return null
   }

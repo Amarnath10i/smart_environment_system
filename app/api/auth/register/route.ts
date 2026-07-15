@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
-import { signToken } from '@/lib/auth'
+import { signToken, toRole } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const token = signToken({ id: user.id, email: user.email, role: user.role })
+    const token = signToken({ id: user.id, email: user.email, role: toRole(user.role) })
     return NextResponse.json({
       user: { id: user.id, email: user.email, name: user.name, role: user.role, isVerified: user.isVerified },
       token,
