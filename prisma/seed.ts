@@ -5,12 +5,19 @@ const prisma = new PrismaClient()
 async function main() {
   const pw = bcrypt.hashSync('password', 10)
 
+  // `update` carries the display fields rather than being empty: with `update: {}`
+  // a re-run left an existing row exactly as it was, so the names below never
+  // reached rows created before they were added -- the demo accounts stayed
+  // nameless and the UI rendered them as "Anonymous". Passwords are left out of
+  // `update` deliberately, so re-seeding never resets a real chosen password.
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@example.com' }, update: {},
+    where: { email: 'admin@example.com' },
+    update: { name: 'Admin', role: 'admin', isVerified: true },
     create: { email: 'admin@example.com', password: pw, name: 'Admin', role: 'admin', isVerified: true }
   })
   const analyst = await prisma.user.upsert({
-    where: { email: 'analyst@example.com' }, update: {},
+    where: { email: 'analyst@example.com' },
+    update: { name: 'Dr. Priya Sharma', role: 'analyst', isVerified: true },
     create: { email: 'analyst@example.com', password: pw, name: 'Dr. Priya Sharma', role: 'analyst', isVerified: true }
   })
 
