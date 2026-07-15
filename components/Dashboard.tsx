@@ -368,131 +368,70 @@ function Overview({sensors}:{sensors:Sensor[]}) {
     return Object.values(m)
   },[sensors])
 
-  return <div className="anim-up" style={{display:'flex',flexDirection:'column',gap:40}}>
+  return <div className="globe-page">
+    <GlobeView markers={markers} selectedId={sel} onSelect={setSel}/>
 
-    {/* ─── Hero: the globe, and the conditions at whatever it is looking at ── */}
-    <section>
-      <div style={{marginBottom:16}}>
-        <h2 style={{fontSize:26,fontWeight:600,letterSpacing:'-0.03em',color:'var(--tx1)'}}>Live conditions</h2>
-        <p style={{fontSize:14,color:'var(--tx3)',marginTop:3}}>
-          {places.length} monitored {places.length===1?'location':'locations'} · {activeCount} of {sensors.length} sensors reporting
-        </p>
+    {/* Readout floats in the black corner the globe's offset leaves free. */}
+    {active && <aside className="readout">
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
+        {active.key===HERE_KEY&&<Navigation size={13} style={{color:'var(--tx2)'}}/>}
+        <span style={{fontSize:12.5,color:'var(--tx3)',letterSpacing:'0.02em'}}>
+          {active.key===HERE_KEY?'Your location':(active.city||'Monitored site')}
+        </span>
+        <span className="badge b-green" style={{marginLeft:2}}><span className="dot dot-green"/>live</span>
       </div>
 
-      <div className="globe-hero">
-        <div className="globe-stage">
-          <GlobeView markers={markers} selectedId={sel} onSelect={setSel}/>
-          {/* Place chips float over the globe rather than stacking below it. */}
-          <div className="globe-chips">
-            {allPlaces.map(p=>{
-              const on=p.key===sel
-              const isHere=p.key===HERE_KEY
-              return <button key={p.key} onClick={()=>setSel(p.key)} className={`chip${on?' on':''}`}>
-                {isHere
-                  ? <Navigation size={11} style={{color:'#FFFFFF'}}/>
-                  : <span className="dot" style={{background:sColor(p.sensors[0]?.type??''),animation:'none',width:6,height:6}}/>}
-                {p.name}
-              </button>
-            })}
-          </div>
-        </div>
+      <h2 style={{fontSize:34,fontWeight:600,letterSpacing:'-0.035em',lineHeight:1.05,marginBottom:2}}>{active.name}</h2>
+      <p style={{fontSize:11.5,color:'var(--tx3)',marginBottom:16}}>
+        {active.lat.toFixed(3)}°, {active.lon.toFixed(3)}°
+      </p>
 
-        {active && <aside className="glass place-panel">
-          <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
-            <div>
-              <h3 style={{fontSize:22,fontWeight:600,letterSpacing:'-0.025em'}}>{active.name}</h3>
-              <p style={{fontSize:13,color:'var(--tx3)',marginTop:2}}>{active.city||'—'}</p>
-            </div>
-            <span className="badge b-green"><span className="dot dot-green"/>live</span>
-          </div>
-
-          <p style={{fontSize:11.5,color:'var(--tx3)',marginTop:8,display:'flex',alignItems:'center',gap:5}}>
-            <MapPin size={11}/>{active.lat.toFixed(4)}°, {active.lon.toFixed(4)}°
-          </p>
-
-          <div className="hr"/>
-
-          <div style={{display:'flex',flexDirection:'column',gap:2}}>
-            {/* "Your location" has no instruments — it reads from Open-Meteo. */}
-            {active.key===HERE_KEY&&here?([
-              {k:'Temperature',v:here.temperature,u:'°C',c:'#FF5C7A',i:<Thermometer size={15}/>},
-              {k:'Humidity',v:here.humidity,u:'%',c:'#6C8CFF',i:<Droplets size={15}/>},
-              {k:'Wind',v:here.windspeed,u:'km/h',c:'#B47CFF',i:<Wind size={15}/>},
-              {k:'UV Index',v:here.uv,u:'',c:'#E45FC4',i:<Activity size={15}/>},
-            ]).map(r=><div key={r.k} className="reading">
-              <span style={{display:'flex',alignItems:'center',gap:9}}>
-                <span style={{color:r.c,display:'flex'}}>{r.i}</span>
-                <span style={{fontSize:14,color:'var(--tx2)'}}>{r.k}</span>
-              </span>
-              <span className="val" style={{fontSize:21,fontWeight:600,color:'var(--tx1)'}}>
-                {r.v!=null?r.v.toFixed(1):'—'}
-                <span style={{fontSize:11,color:'var(--tx3)',marginLeft:3,fontWeight:400}}>{r.u}</span>
-              </span>
-            </div>):active.sensors.map(s=>{
-              const v=latestOf(s)?.value
-              const c=sColor(s.type)
-              return <div key={s.id} className="reading">
-                <span style={{display:'flex',alignItems:'center',gap:9}}>
-                  <span style={{color:c,display:'flex'}}>{sIcon(s.type)}</span>
-                  <span style={{fontSize:14,color:'var(--tx2)'}}>{sLabel(s.type)}</span>
-                </span>
-                <span className="val" style={{fontSize:21,fontWeight:600,color:'var(--tx1)'}}>
-                  {v!=null?v.toFixed(1):'—'}
-                  <span style={{fontSize:11,color:'var(--tx3)',marginLeft:3,fontWeight:400}}>{sUnit(s.type)}</span>
-                </span>
-              </div>
-            })}
-          </div>
-
-          {active.key===HERE_KEY
-            ? <p style={{fontSize:11,color:'var(--tx3)',marginTop:14}}>Live · Open-Meteo</p>
-            : latestOf(active.sensors[0]) && <p style={{fontSize:11,color:'var(--tx3)',marginTop:14}}>
-                Updated {format(new Date(latestOf(active.sensors[0])!.timestamp),'HH:mm')}
-              </p>}
-        </aside>}
+      <div className="readout-grid">
+        {(active.key===HERE_KEY&&here
+          ? [
+              {k:'Temperature',v:here.temperature,u:'°C',c:'#FF5C7A',i:<Thermometer size={14}/>},
+              {k:'Humidity',v:here.humidity,u:'%',c:'#6C8CFF',i:<Droplets size={14}/>},
+              {k:'Wind',v:here.windspeed,u:'km/h',c:'#B47CFF',i:<Wind size={14}/>},
+              {k:'UV Index',v:here.uv,u:'',c:'#E45FC4',i:<Activity size={14}/>},
+            ]
+          : active.sensors.map(s=>({k:sLabel(s.type),v:latestOf(s)?.value??null,u:sUnit(s.type),c:sColor(s.type),i:sIcon(s.type)}))
+        ).map(r=><div key={r.k} className="readout-cell">
+          <span style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
+            <span style={{color:r.c,display:'flex'}}>{r.i}</span>
+            <span style={{fontSize:11.5,color:'var(--tx3)'}}>{r.k}</span>
+          </span>
+          <span className="val" style={{fontSize:24,fontWeight:600,color:'var(--tx1)'}}>
+            {r.v!=null?r.v.toFixed(1):'—'}
+            <span style={{fontSize:11,color:'var(--tx3)',marginLeft:2,fontWeight:400}}>{r.u}</span>
+          </span>
+        </div>)}
       </div>
-    </section>
 
-    {/* ─── Trends ─────────────────────────────────────────────────────────── */}
-    <section>
-      <div style={{marginBottom:14}}>
-        <h2 style={{fontSize:20,fontWeight:600,letterSpacing:'-0.025em'}}>Trends</h2>
-        <p style={{fontSize:13,color:'var(--tx3)',marginTop:2}}>Recent history per instrument</p>
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(420px,1fr))',gap:16}}>
-        {byType.map(s=>{
-          const c=sColor(s.type)
-          const pts=s.data.map(d=>({t:format(new Date(d.timestamp),'HH:mm'),v:parseFloat(d.value.toFixed(2))}))
-          const last=pts.length?pts[pts.length-1].v:null
-          return <div key={s.type} className="card" style={{padding:'18px 18px 10px'}}>
-            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:10}}>
-              <div style={{display:'flex',alignItems:'center',gap:8}}>
-                <span style={{color:c,display:'flex'}}>{sIcon(s.type)}</span>
-                <div>
-                  <p style={{fontSize:15,fontWeight:590,letterSpacing:'-0.015em'}}>{sLabel(s.type)}</p>
-                  <div style={{display:'flex',alignItems:'center',gap:4,marginTop:1}}>
-                    <MapPin size={10} style={{color:'var(--tx3)'}}/><span style={{fontSize:11.5,color:'var(--tx3)'}}>{s.location}</span>
-                  </div>
-                </div>
-              </div>
-              {last!==null&&<p className="val" style={{fontSize:19,fontWeight:600}}>{last}<span style={{fontSize:11,color:'var(--tx3)',marginLeft:2}}>{sUnit(s.type)}</span></p>}
-            </div>
-            <ResponsiveContainer width="100%" height={110}>
-              <AreaChart data={pts} margin={{top:4,right:4,left:0,bottom:0}}>
-                <defs><linearGradient id={`g${s.type}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={c} stopOpacity={0.22}/><stop offset="100%" stopColor={c} stopOpacity={0.01}/></linearGradient></defs>
-                <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.07)" vertical={false}/>
-                <XAxis dataKey="t" tick={{fontSize:10,fill:'var(--tx3)'}} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={44}/>
-                <YAxis tick={{fontSize:10,fill:'var(--tx3)'}} width={30} tickLine={false} axisLine={false}/>
-                <Tooltip content={<TTip/>}/>
-                <Area type="monotone" dataKey="v" name={sLabel(s.type)} stroke={c} strokeWidth={2} fill={`url(#g${s.type})`} dot={false}/>
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        })}
-      </div>
-    </section>
+      <p style={{fontSize:10.5,color:'var(--tx3)',marginTop:14}}>
+        {active.key===HERE_KEY
+          ? 'Live · Open-Meteo'
+          : latestOf(active.sensors[0])
+            ? `Updated ${format(new Date(latestOf(active.sensors[0])!.timestamp),'HH:mm')}`
+            : 'No readings'}
+      </p>
+    </aside>}
+
+    {/* Place chips, bottom-left over the globe. */}
+    <div className="globe-chips">
+      {allPlaces.map(p=>{
+        const on=p.key===sel
+        const isHere=p.key===HERE_KEY
+        return <button key={p.key} onClick={()=>setSel(p.key)} className={`chip${on?' on':''}`}>
+          {isHere
+            ? <Navigation size={11} style={{color:'#FFFFFF'}}/>
+            : <span className="dot" style={{background:sColor(p.sensors[0]?.type??''),animation:'none',width:6,height:6}}/>}
+          {p.name}
+        </button>
+      })}
+    </div>
   </div>
 }
+
 
 
 // ─── Sensors ──────────────────────────────────────────────────────────────────

@@ -430,40 +430,58 @@ textarea.inp { resize: vertical; min-height: 80px; line-height: 1.5; }
 .seg-btn.on { color: #FFFFFF; font-weight: 590; }
 
 /*
- * Globe hero. The globe gets the room; the panel floats beside it rather than
- * everything being crushed into one uniform grid of tiles.
+ * Globe page: the globe IS the page.
+ *
+ * Negative margins cancel the scroll container's padding so the Earth bleeds
+ * to every edge, with no card, no border and no heading competing with it.
  */
-.globe-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.85fr);
-  gap: 24px;
-  align-items: stretch;
-}
-@media (max-width: 1080px) {
-  .globe-hero { grid-template-columns: 1fr; }
-}
-
-.globe-stage {
+.globe-page {
   position: relative;
-  min-height: 460px;
-  border-radius: var(--r-xl);
+  margin: -22px -26px;
+  height: 100vh;
   overflow: hidden;
-  /* Space, not a panel: the Earth should sit in black, with the brand wash
-     bleeding in at the edges. */
-  background:
-    radial-gradient(120% 90% at 50% 0%, rgba(27,42,107,0.30), transparent 62%),
-    radial-gradient(90% 70% at 10% 100%, rgba(155,28,49,0.18), transparent 60%),
-    #040407;
-  border: 1px solid rgba(255,255,255,0.06);
+  background: #04050A;
 }
 @media (max-width: 720px) {
-  .globe-stage { min-height: 340px; }
+  .globe-page { margin: -22px -16px; }
 }
+
+/* Readout in the black corner the globe's offset leaves free. Text on space —
+   no panel chrome, because the reference has none. */
+.readout {
+  position: absolute;
+  top: 30px; left: 32px;
+  z-index: 2;
+  max-width: 330px;
+  pointer-events: none;
+  /* Just enough shadow to survive if a cloud drifts underneath. */
+  text-shadow: 0 2px 18px rgba(0,0,0,0.85);
+}
+@media (max-width: 720px) {
+  .readout { top: 18px; left: 18px; right: 18px; max-width: none; }
+}
+
+.readout-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 18px;
+}
+.readout-cell { display: flex; flex-direction: column; }
+
+/* Live + refresh ride on the globe, top-right. */
+.globe-actions {
+  position: absolute;
+  top: 26px; right: 30px;
+  z-index: 2;
+  display: flex; align-items: center; gap: 12px;
+}
+
 
 /* Chips ride over the globe, bottom-left, as floating glass. */
 .globe-chips {
   position: absolute;
-  left: 16px; bottom: 16px; right: 16px;
+  left: 32px; bottom: 24px; right: 32px;
+  z-index: 2;
   display: flex; flex-wrap: wrap; gap: 7px;
   pointer-events: none;
 }

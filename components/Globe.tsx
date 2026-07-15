@@ -173,14 +173,49 @@ export function Globe({
           vec3 night = texture2D(uNight, vUv).rgb;
           // Lights fade out as dawn arrives instead of vanishing abruptly.
           vec3 lights = night * (1.0 - t) * 1.25;
-          vec3 lit = day * clamp(t, 0.02, 1.0) * 1.35;
+          // Lift and saturate: Blue Marble is flat and dim next to the reference.
+          vec3 lit = day * clamp(t, 0.02, 1.0) * 1.5;
+          float lum = dot(lit, vec3(0.2126, 0.7152, 0.0722));
+          lit = mix(vec3(lum), lit, 1.35);
           gl_FragColor = vec4(lit + lights, 1.0);
         }
       `,
     })
 
     const earth = new THREE.Mesh(new THREE.SphereGeometry(R, 128, 128), earthMat)
-    scene.add(earth)
+
+    /**
+     * Everything orbital lives in one group so it can be shifted together.
+     *
+     * The Earth is pushed down and right so its limb arcs across the top-left
+     * and leaves black space there — that corner is where the readout sits, and
+     * a centred globe would put land behind the text.
+     */
+    const root = new THREE.Group()
+    root.position.set(0.30, -0.42, 0)
+    // Tilt: the reference is shot from an inclined orbit, so its horizon runs
+    // diagonally rather than level. Rotating the whole group keeps the
+    // atmosphere and markers locked to the same slant.
+    root.rotation.z = -0.3
+    root.add(earth)
+    scene.add(root)
+
+    // ---- Stars: a little depth in the empty corner.
+    const starGeo = new THREE.BufferGeometry()
+    const starCount = 900
+    const starPos = new Float32Array(starCount * 3)
+    for (let i = 0; i < starCount; i++) {
+      // Rejection-sample a shell so stars sit far behind the globe, never inside it.
+      const v = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize()
+      v.multiplyScalar(14 + Math.random() * 10)
+      starPos.set([v.x, v.y, v.z], i * 3)
+    }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
+    const stars = new THREE.Points(
+      starGeo,
+      new THREE.PointsMaterial({ color: 0xffffff, size: 0.035, sizeAttenuation: true, transparent: true, opacity: 0.75 }),
+    )
+    scene.add(stars)
 
     /**
      * Clouds, on their own shell just above the surface.
@@ -238,13 +273,15 @@ export function Globe({
             float rim = 1.0 - abs(dot(normalize(vN), normalize(-vP)));
             // Steeper falloff and lower gain: the previous curve produced a
             // hard painted ring instead of a soft limb bleeding into space.
-            float a = pow(rim, 6.0) * 0.62;
+            // Two lobes: a tight brilliant line hugging the limb, plus a wide faint
+            // bloom. One lobe alone reads either as a hard ring or as haze.
+            float a = pow(rim, 14.0) * 1.7 + pow(rim, 3.2) * 0.14;
             gl_FragColor = vec4(uColor, a);
           }
         `,
       }),
     )
-    scene.add(atmosphere)
+    root.add(atmosphere)
 
     // ---- Markers
     const markerGroup = new THREE.Group()
