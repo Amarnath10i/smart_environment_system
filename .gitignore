@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local sqlite dev database (contains real account hashes - never commit)
+prisma/dev.db
+prisma/*.db-journal
