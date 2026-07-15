@@ -31,6 +31,17 @@ const sIcon = (t:string) => { switch(t){case'temperature':return<Thermometer siz
 const sUnit = (t:string) => ({temperature:'°C',humidity:'%',air_quality:'AQI'}[t]??'')
 const sColor = (t:string) => ({temperature:'#FF5C7A',humidity:'#6C8CFF',air_quality:'#B47CFF'}[t]??'#E45FC4')
 const sLabel = (t:string) => t.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())
+
+/*
+ * Abbreviated labels, for the globe readout only — it sits in a narrow column
+ * over the globe, where the full names wrap. Everywhere with room keeps sLabel.
+ * Unlisted types fall back to the full name rather than being truncated blind.
+ */
+const SHORT: Record<string,string> = {
+  temperature:'Temp', humidity:'Hum', air_quality:'AQI', uv_index:'UV',
+  noise_level:'Noise', water_quality:'Water', soil_moisture:'Soil',
+}
+const sShort = (t:string) => SHORT[t] ?? sLabel(t)
 const fmtLoc = (loc:string) => loc  // location is already a name like "City Center"
 const rup = (n:number) => `₹${n.toLocaleString('en-IN')}`
 
@@ -310,7 +321,7 @@ const HERE_KEY='__here__'
 
 type Place = { key:string; name:string; city:string; lat:number; lon:number; sensors:Sensor[] }
 
-function Overview({sensors}:{sensors:Sensor[]}) {
+function Overview({sensors,onRefresh,refreshing}:{sensors:Sensor[];onRefresh:()=>void;refreshing:boolean}) {
   // Group by physical place: the globe plots locations, not sensor rows, and a
   // city usually carries more than one instrument.
   const places = useMemo(()=>{
@@ -378,10 +389,9 @@ function Overview({sensors}:{sensors:Sensor[]}) {
         <span style={{fontSize:12.5,color:'var(--tx3)',letterSpacing:'0.02em'}}>
           {active.key===HERE_KEY?'Your location':(active.city||'Monitored site')}
         </span>
-        <span className="badge b-green" style={{marginLeft:2}}><span className="dot dot-green"/>live</span>
       </div>
 
-      <h2 style={{fontSize:34,fontWeight:600,letterSpacing:'-0.035em',lineHeight:1.05,marginBottom:2}}>{active.name}</h2>
+      <h2 style={{fontSize:24,fontWeight:600,letterSpacing:'-0.02em',lineHeight:1.1,marginBottom:2}}>{active.name}</h2>
       <p style={{fontSize:11.5,color:'var(--tx3)',marginBottom:16}}>
         {active.lat.toFixed(3)}°, {active.lon.toFixed(3)}°
       </p>
@@ -389,12 +399,12 @@ function Overview({sensors}:{sensors:Sensor[]}) {
       <div className="readout-grid">
         {(active.key===HERE_KEY&&here
           ? [
-              {k:'Temperature',v:here.temperature,u:'°C',c:'#FF5C7A',i:<Thermometer size={14}/>},
-              {k:'Humidity',v:here.humidity,u:'%',c:'#6C8CFF',i:<Droplets size={14}/>},
+              {k:'Temp',v:here.temperature,u:'°C',c:'#FF5C7A',i:<Thermometer size={14}/>},
+              {k:'Hum',v:here.humidity,u:'%',c:'#6C8CFF',i:<Droplets size={14}/>},
               {k:'Wind',v:here.windspeed,u:'km/h',c:'#B47CFF',i:<Wind size={14}/>},
-              {k:'UV Index',v:here.uv,u:'',c:'#E45FC4',i:<Activity size={14}/>},
+              {k:'UV',v:here.uv,u:'',c:'#E45FC4',i:<Activity size={14}/>},
             ]
-          : active.sensors.map(s=>({k:sLabel(s.type),v:latestOf(s)?.value??null,u:sUnit(s.type),c:sColor(s.type),i:sIcon(s.type)}))
+          : active.sensors.map(s=>({k:sShort(s.type),v:latestOf(s)?.value??null,u:sUnit(s.type),c:sColor(s.type),i:sIcon(s.type)}))
         ).map(r=><div key={r.k} className="readout-cell">
           <span style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
             <span style={{color:r.c,display:'flex'}}>{r.i}</span>
@@ -415,6 +425,13 @@ function Overview({sensors}:{sensors:Sensor[]}) {
             : 'No readings'}
       </p>
     </aside>}
+
+    {/* Refresh, top-right over the globe — the page header it used to sit in is
+        hidden on this tab. */}
+    <button className="btn btn-ghost btn-xs globe-refresh" onClick={onRefresh} disabled={refreshing}>
+      <RefreshCw size={12} style={{animation:refreshing?'spin 1s linear infinite':'none'}}/>
+      {refreshing?'Syncing':'Refresh'}
+    </button>
 
     {/* Imagery credit — required by the NASA and Esri licences. */}
     <p className="globe-credit">NASA EOSDIS GIBS · Esri, Maxar, Earthstar Geographics</p>
@@ -1041,7 +1058,7 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
   const showToast=(msg:string,type:'ok'|'err'|'info')=>setToast({msg,type})
 
   const nav=[
-    {k:'overview',l:'Overview',i:<LayoutDashboard size={15}/>},
+    {k:'overview',l:'Home',i:<LayoutDashboard size={15}/>},
     {k:'sensors',l:'Sensors',i:<Radio size={15}/>,c:sensors.length},
     {k:'analytics',l:'Analytics',i:<BarChart3 size={15}/>},
     {k:'news',l:'News',i:<Newspaper size={15}/>,c:news.length},
@@ -1094,8 +1111,9 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
 
     {/* Main */}
     <main style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',position:'relative',zIndex:1}}>
-      {/* Header */}
-      <header style={{padding:'14px 26px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--b1)',background:'linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.008))',backdropFilter:'blur(44px) saturate(190%)',WebkitBackdropFilter:'blur(44px) saturate(190%)',flexShrink:0,position:'sticky',top:0,zIndex:50}}>
+      {/* Header — hidden on Home, where the globe runs full-bleed and carries
+          its own refresh control instead. */}
+      {tab!=='overview'&&<header style={{padding:'14px 26px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--b1)',background:'linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.008))',backdropFilter:'blur(44px) saturate(190%)',WebkitBackdropFilter:'blur(44px) saturate(190%)',flexShrink:0,position:'sticky',top:0,zIndex:50}}>
         <div>
           <h1 style={{fontSize:15.5,fontWeight:700,fontFamily:'inherit'}}>{nav.find(n=>n.k===tab)?.l}</h1>
           <p className="val" style={{fontSize:11,color:'var(--tx3)',marginTop:1}}>{format(new Date(),'EEEE, MMMM d · HH:mm')}</p>
@@ -1109,11 +1127,11 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
             <RefreshCw size={12} style={{animation:refreshing?'spin 1s linear infinite':'none'}}/>{refreshing?'Syncing':'Refresh'}
           </button>
         </div>
-      </header>
+      </header>}
 
-      {/* Content */}
-      <div style={{flex:1,overflowY:'auto',padding:'22px 26px'}}>
-        {tab==='overview'&&<Overview sensors={sensors}/>}
+      {/* Content — Home is full-bleed so the globe reaches every edge. */}
+      <div style={{flex:1,overflowY:tab==='overview'?'hidden':'auto',padding:tab==='overview'?0:'22px 26px'}}>
+        {tab==='overview'&&<Overview sensors={sensors} onRefresh={load} refreshing={refreshing}/>}
         {tab==='sensors'&&<Sensors sensors={sensors} onRefresh={load}/>}
         {tab==='analytics'&&<Analytics sensors={sensors}/>}
         {tab==='news'&&<NewsTab news={news}/>}

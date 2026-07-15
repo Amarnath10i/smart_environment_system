@@ -435,15 +435,25 @@ textarea.inp { resize: vertical; min-height: 80px; line-height: 1.5; }
  * Negative margins cancel the scroll container's padding so the Earth bleeds
  * to every edge, with no card, no border and no heading competing with it.
  */
+/* The Home tab renders with no page padding, so this simply fills its parent.
+   It used negative margins to escape that padding, which once the padding went
+   to zero pushed it past the viewport and raised a scrollbar. */
 .globe-page {
   position: relative;
-  margin: -22px -26px;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
   background: #04050A;
 }
-@media (max-width: 720px) {
-  .globe-page { margin: -22px -16px; }
+
+/* Refresh, floating top-right over the globe. */
+.globe-refresh {
+  position: absolute;
+  top: 26px;
+  right: 26px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Readout in the black corner the globe's offset leaves free. Text on space —
