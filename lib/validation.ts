@@ -69,6 +69,19 @@ export const sensorDataSchema = z.object({
   value: z.coerce.number().finite(),
 })
 
+export const sensorSchema = z.object({
+  type: z.enum(['temperature', 'humidity', 'air_quality', 'noise']),
+  location: z.string().trim().min(1).max(120),
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lon: z.coerce.number().min(-180).max(180).optional(),
+  status: z.enum(['active', 'inactive', 'maintenance']).default('active'),
+})
+
+/** How many readings per sensor the dashboard charts should receive. */
+export const sensorQuerySchema = z.object({
+  history: z.coerce.number().int().min(1).max(100).default(24),
+})
+
 export const alertSchema = z.object({
   type: z.enum(['info', 'warning', 'critical']),
   message: z.string().trim().min(1).max(500),
