@@ -50,7 +50,7 @@ const CLOSE_PITCH = 34
  * canvas, which keeps the whole canvas live for panning and keeps the selected
  * place on-screen. Fractions of the container, so it holds at any window size.
  */
-const FRAMING_PAD = { top: 0.62, left: 0.55 }
+const FRAMING_PAD = { top: 0.4, left: 0.32 }
 
 function framingPadding(map: maplibregl.Map) {
   const c = map.getContainer()
