@@ -76,6 +76,22 @@ export function Globe({
             attribution: 'NASA EOSDIS GIBS',
           },
           /*
+           * High-detail imagery, for everything past orbit.
+           *
+           * GIBS stops at level 8 — fine from space, mush up close. Esri's
+           * World Imagery carries on to ~19 (street level), needs no key, and
+           * sends `Access-Control-Allow-Origin: *`.
+           */
+          detail: {
+            type: 'raster',
+            tiles: [
+              'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            ],
+            tileSize: 256,
+            maxzoom: 19,
+            attribution: 'Esri, Maxar, Earthstar Geographics',
+          },
+          /*
            * MODIS daily true-colour is deliberately NOT layered on top.
            *
            * The satellite images the globe in orbital swaths, so a single day
@@ -90,6 +106,8 @@ export function Globe({
         layers: [
           { id: 'space', type: 'background', paint: { 'background-color': '#04050A' } },
           {
+            // Blue Marble holds the wide view: its shaded relief and bathymetry
+            // look better from orbit than a raw imagery mosaic.
             id: 'earth',
             type: 'raster',
             source: 'bluemarble',
@@ -99,6 +117,17 @@ export function Globe({
               'raster-saturation': 0.12,
               'raster-contrast': 0.08,
               'raster-brightness-min': 0.02,
+            },
+          },
+          {
+            // Detail fades in as you descend, so the handover is a dissolve
+            // rather than a visible swap.
+            id: 'earth-detail',
+            type: 'raster',
+            source: 'detail',
+            paint: {
+              'raster-opacity': ['interpolate', ['linear'], ['zoom'], 2.5, 0, 5, 1],
+              'raster-fade-duration': 300,
             },
           },
         ],
@@ -120,8 +149,9 @@ export function Globe({
       // No idle spin — it holds still until the viewer moves it.
     })
 
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right')
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right')
+    // No MapLibre controls: they anchor to the canvas, whose corners now sit
+    // off-screen under this framing. Zoom is scroll/pinch; the NASA and Esri
+    // credits their licences require are rendered by the page instead.
     map.on('style.load', () => map.setProjection({ type: 'globe' }))
 
     mapRef.current = map
@@ -177,5 +207,19 @@ export function Globe({
     else map.once('load', go)
   }, [markers, selectedId])
 
-  return <div ref={mount} className={className} style={{ width: '100%', height: '100%' }} />
+  /*
+   * Framing: the globe's centre is parked on the page's bottom-right corner, so
+   * only its upper-left quadrant fills the view — the limb sweeps from the left
+   * edge up to the top-right, exactly as in the reference.
+   *
+   * MapLibre always centres the globe in its own canvas, so the canvas is made
+   * twice the page in each axis and pinned at top-left. Its centre then lands
+   * on the wrapper's bottom-right corner, and the wrapper clips the rest. The
+   * doubled canvas also renders the sphere at 2x, which is what fills the page.
+   */
+  return (
+    <div className={className} style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+      <div ref={mount} style={{ position: 'absolute', top: 0, left: 0, width: '200%', height: '200%' }} />
+    </div>
+  )
 }

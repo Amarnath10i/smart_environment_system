@@ -416,6 +416,9 @@ function Overview({sensors}:{sensors:Sensor[]}) {
       </p>
     </aside>}
 
+    {/* Imagery credit — required by the NASA and Esri licences. */}
+    <p className="globe-credit">NASA EOSDIS GIBS · Esri, Maxar, Earthstar Geographics</p>
+
 
   </div>
 }
