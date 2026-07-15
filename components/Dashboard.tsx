@@ -3,16 +3,21 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Thermometer, Droplets, Wind, Activity, Radio, Newspaper, Users, Megaphone, HeartHandshake, MessageSquare, MapPin, RefreshCw, Plus, X, Send, AlertTriangle, Globe, UserCircle, Lock, Mail, LogOut, LayoutDashboard, BarChart3, Leaf, CheckCircle, Smartphone, CreditCard, Wallet, ChevronRight, Bell, Zap } from 'lucide-react'
 import { format } from 'date-fns'
+import { apiGet, apiPost, ApiError, type Page } from '@/lib/api-client'
+import { useEventStream } from '@/lib/use-event-stream'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface User { id:number; email:string; name:string|null; role:string; isVerified?:boolean }
 interface Sensor { id:number; type:string; location:string; lat:number|null; lon:number|null; status:string; data:{value:number;timestamp:string}[] }
 interface SensorData { id:number; sensorId:number; value:number; timestamp:string; sensor:{type:string;location:string} }
 interface NewsItem { id:number; title:string; content:string; source:string; createdAt:string }
-interface Campaign { id:number; title:string; description:string; creator:{name:string|null;email:string}; participants:{name:string|null;email:string}[] }
-interface Group { id:number; name:string; issue:string; creator:{name:string|null;email:string}; members:{name:string|null;email:string}[]; _count:{messages:number} }
-interface GroupMessage { id:number; content:string; createdAt:string; user:{name:string|null;email:string} }
-interface Fundraiser { id:number; cause:string; description:string; goal:number; raised:number; creator:{name:string|null;email:string} }
+// Listings identify people by id and name only -- the API no longer returns
+// other users' email addresses to unauthenticated callers.
+interface Person { id:number; name:string|null }
+interface Campaign { id:number; title:string; description:string; creator:Person; participants:Person[] }
+interface Group { id:number; name:string; issue:string; creator:Person; members:Person[]; _count:{messages:number} }
+interface GroupMessage { id:number; groupId?:number; content:string; createdAt:string; user:Person }
+interface Fundraiser { id:number; cause:string; description:string; goal:number; raised:number; creator:Person }
 type Tab = 'overview'|'sensors'|'analytics'|'news'|'campaigns'|'groups'|'fundraisers'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -62,7 +67,8 @@ function PaymentModal({fundraiser,user,onClose,onSuccess}:{fundraiser:Fundraiser
     // Simulate processing delay
     await new Promise(r=>setTimeout(r,2200))
     try {
-      await fetch('/api/fundraisers/donate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fundraiserId:fundraiser.id,userId:user.id,amount:parseFloat(amount),method})})
+      // No userId: the server takes the donor from the bearer token.
+      await apiPost('/api/fundraisers/donate',{fundraiserId:fundraiser.id,amount:parseFloat(amount),method})
       setStep('done')
       setTimeout(()=>{ onSuccess(parseFloat(amount),method); onClose() },1800)
     } catch { setStep('method') }
@@ -149,13 +155,16 @@ function AuthScreen({onAuth}:{onAuth:(u:User,t:string,msg?:string)=>void}) {
   const submit = async () => {
     setError(''); setInfo(''); setLoading(true)
     try {
-      const res = await fetch(`/api/auth/${mode}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(mode==='login'?{email,password}:{email,password,name})})
-      const data = await res.json()
-      if(!res.ok) throw new Error(data.error||'Failed')
+      const data = await apiPost<{user:User;token:string;message?:string}>(`/api/auth/${mode}`, mode==='login'?{email,password}:{email,password,name})
       if(mode==='register'&&data.message) setInfo(data.message)
       localStorage.setItem('token',data.token); localStorage.setItem('user',JSON.stringify(data.user))
       setTimeout(()=>onAuth(data.user,data.token,data.message),mode==='register'?1200:0)
-    } catch(e:any){setError(e.message)} finally{setLoading(false)}
+    } catch(e){
+      // Prefer the specific field reason ("Password must be at least 8
+      // characters") over the generic "Validation failed".
+      const fieldMsg = e instanceof ApiError && e.fields ? Object.values(e.fields)[0] : null
+      setError(fieldMsg ?? (e instanceof Error ? e.message : 'Failed'))
+    } finally{setLoading(false)}
   }
 
   return <div className="login-bg" style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:20,background:'var(--bg)'}}>
@@ -662,10 +671,11 @@ function NewsTab({news}:{news:NewsItem[]}) {
 
 // ─── Campaigns ────────────────────────────────────────────────────────────────
 function CampaignsTab({campaigns,user,onRefresh}:{campaigns:Campaign[];user:User;onRefresh:()=>void}) {
-  const [show,setShow]=useState(false); const [title,setTitle]=useState(''); const [desc,setDesc]=useState(''); const [loading,setLoading]=useState(false)
-  const create=async()=>{ if(!title.trim())return; setLoading(true); await fetch('/api/campaigns',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,description:desc,creatorId:user.id})}); setTitle('');setDesc('');setShow(false);setLoading(false);onRefresh() }
-  const join=async(id:number)=>{ await fetch('/api/campaigns/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:user.id,campaignId:id})}); onRefresh() }
-  const isIn=(c:Campaign)=>c.participants.some(p=>p.email===user.email)||c.creator.email===user.email
+  const [show,setShow]=useState(false); const [title,setTitle]=useState(''); const [desc,setDesc]=useState(''); const [loading,setLoading]=useState(false); const [error,setError]=useState('')
+  // No creatorId/userId: the server uses the bearer token's identity.
+  const create=async()=>{ if(!title.trim())return; setLoading(true); try{ await apiPost('/api/campaigns',{title,description:desc}); setTitle('');setDesc('');setShow(false);onRefresh() }catch(e){ setError(e instanceof Error?e.message:'Failed to create campaign') } finally{ setLoading(false) } }
+  const join=async(id:number)=>{ try{ await apiPost('/api/campaigns/join',{campaignId:id}); onRefresh() }catch(e){ setError(e instanceof Error?e.message:'Failed to join') } }
+  const isIn=(c:Campaign)=>c.participants.some(p=>p.id===user.id)||c.creator.id===user.id
 
   return <div className="anim-up" style={{display:'flex',flexDirection:'column',gap:16}}>
     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -680,6 +690,7 @@ function CampaignsTab({campaigns,user,onRefresh}:{campaigns:Campaign[];user:User
         <div style={{display:'flex',gap:8}}><button className="btn btn-green" onClick={create} disabled={loading}>{loading?'Creating...':'Create'}</button><button className="btn btn-ghost" onClick={()=>setShow(false)}>Cancel</button></div>
       </div>
     </div>}
+    {error&&<p style={{color:'#f87171',fontSize:12}}>{error}</p>}
     {!campaigns.length&&<p style={{color:'var(--tx3)',textAlign:'center',padding:'50px 0'}}>No campaigns yet. Start one!</p>}
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:13}}>
       {campaigns.map(c=><div key={c.id} className="card" style={{padding:'18px 20px'}}>
@@ -690,7 +701,7 @@ function CampaignsTab({campaigns,user,onRefresh}:{campaigns:Campaign[];user:User
         <p style={{fontSize:13,color:'var(--tx2)',lineHeight:1.55,marginBottom:14}}>{c.description}</p>
         <div className="hr"/>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <span style={{fontSize:11.5,color:'var(--tx3)',display:'flex',alignItems:'center',gap:4}}><Users size={11}/>{c.participants.length} joined · {c.creator.name||c.creator.email}</span>
+          <span style={{fontSize:11.5,color:'var(--tx3)',display:'flex',alignItems:'center',gap:4}}><Users size={11}/>{c.participants.length} joined · {c.creator.name||'Anonymous'}</span>
           {!isIn(c)&&<button className="btn btn-green btn-xs" onClick={()=>join(c.id)}>Join</button>}
         </div>
       </div>)}
@@ -702,19 +713,38 @@ function CampaignsTab({campaigns,user,onRefresh}:{campaigns:Campaign[];user:User
 function GroupsTab({groups,user,onRefresh}:{groups:Group[];user:User;onRefresh:()=>void}) {
   const [show,setShow]=useState(false); const [name,setName]=useState(''); const [issue,setIssue]=useState(''); const [loading,setLoading]=useState(false)
   const [activeG,setActiveG]=useState<Group|null>(null); const [msgs,setMsgs]=useState<GroupMessage[]>([]); const [txt,setTxt]=useState(''); const [sending,setSending]=useState(false)
+  const [error,setError]=useState(''); const [streamKey,setStreamKey]=useState(0)
   const chatRef=useRef<HTMLDivElement>(null)
+  // Bumped after create/join so the stream reconnects and picks up the new
+  // membership, which the server resolves at connect time.
+  const onStreamRefresh=()=>setStreamKey(k=>k+1)
 
-  const create=async()=>{ if(!name.trim())return; setLoading(true); await fetch('/api/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,issue,creatorId:user.id})}); setName('');setIssue('');setShow(false);setLoading(false);onRefresh() }
-  const join=async(id:number)=>{ await fetch('/api/groups/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:user.id,groupId:id})}); onRefresh() }
-  const openChat=async(g:Group)=>{ setActiveG(g); const r=await fetch(`/api/messages?groupId=${g.id}`); setMsgs(await r.json()); setTimeout(()=>chatRef.current?.scrollTo({top:chatRef.current.scrollHeight,behavior:'smooth'}),80) }
-  const send=async()=>{ if(!txt.trim()||!activeG)return; setSending(true); const r=await fetch('/api/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:txt,groupId:activeG.id,userId:user.id})}); const m=await r.json(); setMsgs(p=>[...p,m]); setTxt(''); setSending(false); setTimeout(()=>chatRef.current?.scrollTo({top:chatRef.current.scrollHeight,behavior:'smooth'}),50) }
-  const isMem=(g:Group)=>g.members.some(m=>m.email===user.email)||g.creator.email===user.email
+  const scroll=(d=60)=>setTimeout(()=>chatRef.current?.scrollTo({top:chatRef.current.scrollHeight,behavior:'smooth'}),d)
+  // Appends only if we have not already seen this id: the author is a member,
+  // so their own message also arrives back over the stream.
+  const addMsg=(m:GroupMessage)=>setMsgs(p=>p.some(x=>x.id===m.id)?p:[...p,m])
+
+  // No creatorId/userId in any of these: the server uses the token's identity.
+  const create=async()=>{ if(!name.trim())return; setLoading(true); try{ await apiPost('/api/groups',{name,issue}); setName('');setIssue('');setShow(false);onStreamRefresh();onRefresh() }catch(e){ setError(e instanceof Error?e.message:'Failed to create group') } finally{ setLoading(false) } }
+  const join=async(id:number)=>{ try{ await apiPost('/api/groups/join',{groupId:id}); onStreamRefresh(); onRefresh() }catch(e){ setError(e instanceof Error?e.message:'Failed to join') } }
+  const openChat=async(g:Group)=>{ setActiveG(g); setError(''); try{ const r=await apiGet<Page<GroupMessage>>(`/api/messages?groupId=${g.id}`); setMsgs(r.items); scroll(80) }catch(e){ setMsgs([]); setError(e instanceof Error?e.message:'Failed to load chat') } }
+  const send=async()=>{ if(!txt.trim()||!activeG)return; setSending(true); try{ const m=await apiPost<GroupMessage>('/api/messages',{content:txt,groupId:activeG.id}); addMsg(m); setTxt(''); scroll(50) }catch(e){ setError(e instanceof Error?e.message:'Failed to send') } finally{ setSending(false) } }
+  const isMem=(g:Group)=>g.members.some(m=>m.id===user.id)||g.creator.id===user.id
+
+  // Live chat for the open group.
+  useEventStream((type,payload)=>{
+    if(type!=='message:new'||!activeG) return
+    const m=payload as GroupMessage
+    if(m.groupId!==activeG.id) return
+    addMsg(m); scroll(30)
+  },true,streamKey)
 
   return <div className="anim-up" style={{display:'flex',flexDirection:'column',gap:16}}>
     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
       <p className="sec">Community Groups</p>
       <button className="btn btn-green btn-sm" onClick={()=>setShow(true)}><Plus size={13}/>New Group</button>
     </div>
+    {error&&<p style={{color:'#f87171',fontSize:12}}>{error}</p>}
     {show&&<div className="card" style={{padding:'20px 22px',borderColor:'rgba(74,222,128,0.28)'}}>
       <p style={{fontWeight:700,marginBottom:14,color:'#4ade80',fontFamily:'Space Grotesk,sans-serif',fontSize:13}}>Create Group</p>
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
@@ -746,9 +776,9 @@ function GroupsTab({groups,user,onRefresh}:{groups:Group[];user:User;onRefresh:(
         </div>
         <div ref={chatRef} className="chat-scroll">
           {!msgs.length&&<p style={{color:'var(--tx3)',textAlign:'center',margin:'auto',fontSize:13}}>Say hello! 👋</p>}
-          {msgs.map(m=><div key={m.id} style={{display:'flex',flexDirection:'column',alignItems:m.user.email===user.email?'flex-end':'flex-start',gap:3}}>
-            <p style={{fontSize:9.5,color:'var(--tx3)',paddingInline:6}}>{m.user.name||m.user.email}</p>
-            <div className={`bubble ${m.user.email===user.email?'b-me':'b-them'}`}>{m.content}</div>
+          {msgs.map(m=><div key={m.id} style={{display:'flex',flexDirection:'column',alignItems:m.user.id===user.id?'flex-end':'flex-start',gap:3}}>
+            <p style={{fontSize:9.5,color:'var(--tx3)',paddingInline:6}}>{m.user.name||'Anonymous'}</p>
+            <div className={`bubble ${m.user.id===user.id?'b-me':'b-them'}`}>{m.content}</div>
             <p style={{fontSize:9.5,color:'rgba(240,250,244,0.2)',paddingInline:6}}>{format(new Date(m.createdAt),'HH:mm')}</p>
           </div>)}
         </div>
@@ -768,7 +798,8 @@ function FundraisersTab({fundraisers,user,onRefresh,onToast}:{fundraisers:Fundra
 
   useEffect(()=>setLocalFunds(fundraisers),[fundraisers])
 
-  const create=async()=>{ if(!cause.trim()||!goal)return; setLoading(true); await fetch('/api/fundraisers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cause,description:desc,goal:parseFloat(goal),creatorId:user.id})}); setCause('');setDesc('');setGoal('');setShow(false);setLoading(false);onRefresh() }
+  // No creatorId: the server uses the bearer token's identity.
+  const create=async()=>{ if(!cause.trim()||!goal)return; setLoading(true); try{ await apiPost('/api/fundraisers',{cause,description:desc,goal:parseFloat(goal)}); setCause('');setDesc('');setGoal('');setShow(false);onRefresh() }catch(e){ onToast(e instanceof Error?e.message:'Failed to create fundraiser','err') } finally{ setLoading(false) } }
 
   const handleDonation=(f:Fundraiser,amt:number,method:string)=>{
     setLocalFunds(prev=>prev.map(x=>x.id===f.id?{...x,raised:x.raised+amt}:x))
@@ -809,7 +840,7 @@ function FundraisersTab({fundraisers,user,onRefresh,onToast}:{fundraisers:Fundra
           </div>
           <div className="hr" style={{margin:'4px 0'}}/>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-            <span style={{fontSize:11.5,color:'var(--tx3)',display:'flex',alignItems:'center',gap:4}}><HeartHandshake size={12}/>{f.creator.name||f.creator.email}</span>
+            <span style={{fontSize:11.5,color:'var(--tx3)',display:'flex',alignItems:'center',gap:4}}><HeartHandshake size={12}/>{f.creator.name||'Anonymous'}</span>
             <button className="btn btn-green btn-sm" onClick={()=>setPaying(f)}><Wallet size={12}/>Fund Now</button>
           </div>
         </div>
@@ -829,13 +860,39 @@ function AppShell({user,onLogout}:{user:User;onLogout:()=>void}) {
 
   const load=useCallback(async()=>{
     setRefreshing(true)
-    const [s,n,c,g,f]=await Promise.all([fetch('/api/sensors'),fetch('/api/news'),fetch('/api/campaigns'),fetch('/api/groups'),fetch('/api/fundraisers')].map(p=>p.then(r=>r.json())))
-    if(Array.isArray(s))setSensors(s); if(Array.isArray(n))setNews(n); if(Array.isArray(c))setCampaigns(c); if(Array.isArray(g))setGroups(g); if(Array.isArray(f))setFundraisers(f)
-    setRefreshing(false)
+    try{
+      // sensors/news return plain arrays; the community lists are paginated.
+      const [s,n,c,g,f]=await Promise.all([
+        apiGet<Sensor[]>('/api/sensors'),
+        apiGet<NewsItem[]>('/api/news'),
+        apiGet<Page<Campaign>>('/api/campaigns?limit=50'),
+        apiGet<Page<Group>>('/api/groups?limit=50'),
+        apiGet<Page<Fundraiser>>('/api/fundraisers?limit=50'),
+      ])
+      setSensors(s); setNews(n); setCampaigns(c.items); setGroups(g.items); setFundraisers(f.items)
+    }catch{
+      // Keep whatever is on screen rather than blanking the dashboard.
+    }finally{ setRefreshing(false) }
   },[])
 
   useEffect(()=>{load()},[load])
-  useEffect(()=>{const t=setInterval(load,60000);return()=>clearInterval(t)},[load])
+  // Live updates arrive over /api/events. The poll stays as a slow safety net
+  // for anything missed while the stream was down, at 5 minutes rather than
+  // the old 60s.
+  useEffect(()=>{const t=setInterval(load,300000);return()=>clearInterval(t)},[load])
+
+  useEventStream((type,payload)=>{
+    if(type==='donation:new'){
+      // Patch the one total in place instead of refetching every list.
+      const d=payload as {fundraiserId:number;raised:number}
+      setFundraisers(p=>p.map(f=>f.id===d.fundraiserId?{...f,raised:d.raised}:f))
+    } else if(type==='campaign:new'||type==='group:new'){
+      load()
+    } else if(type==='alert:new'){
+      const a=payload as {message:string}
+      setToast({msg:a.message,type:'err'})
+    }
+  })
 
   const showToast=(msg:string,type:'ok'|'err'|'info')=>setToast({msg,type})
 
