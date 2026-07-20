@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/api-auth'
 import { publish } from '@/lib/events'
 import { groupSchema, paginationSchema, parseBody, parseQuery } from '@/lib/validation'
+import { getLiveGroups, toLocalGroup } from '@/lib/live-groups'
 
 export async function GET(request: NextRequest) {
   const query = parseQuery(request.url, paginationSchema)
@@ -10,10 +11,13 @@ export async function GET(request: NextRequest) {
   const { page, limit } = query.data
 
   try {
-    const [items, total] = await Promise.all([
+    // Fetch live groups from external sources
+    const liveItems = await getLiveGroups()
+    const liveGroups = liveItems.map(toLocalGroup)
+
+    // Fetch local groups from DB
+    const [localItems, total] = await Promise.all([
       prisma.group.findMany({
-        // Public listing: names only. Emails are personal data and this
-        // endpoint is unauthenticated.
         include: {
           creator: { select: { id: true, name: true } },
           members: { select: { id: true, name: true } },
@@ -26,7 +30,17 @@ export async function GET(request: NextRequest) {
       prisma.group.count(),
     ])
 
-    return NextResponse.json({ items, page, limit, total, totalPages: Math.ceil(total / limit) })
+    // Merge: live first, then local
+    const merged = [...liveGroups, ...localItems]
+    const paginated = merged.slice((page - 1) * limit, page * limit)
+
+    return NextResponse.json({
+      items: paginated,
+      page,
+      limit,
+      total: merged.length,
+      totalPages: Math.ceil(merged.length / limit),
+    })
   } catch {
     return NextResponse.json({ error: 'Failed to fetch groups' }, { status: 500 })
   }
@@ -41,7 +55,6 @@ export async function POST(request: NextRequest) {
 
   try {
     const group = await prisma.group.create({
-      // The creator joins their own group, so they can post to it immediately.
       data: {
         ...parsed.data,
         creatorId: auth.user.id,

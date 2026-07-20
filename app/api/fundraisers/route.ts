@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/api-auth'
 import { fundraiserSchema, paginationSchema, parseBody, parseQuery } from '@/lib/validation'
 import { publish } from '@/lib/events'
+import { getLiveFundraisers, toLocalFundraiser } from '@/lib/live-fundraisers'
 
 export async function GET(request: NextRequest) {
   const query = parseQuery(request.url, paginationSchema)
@@ -10,7 +11,12 @@ export async function GET(request: NextRequest) {
   const { page, limit } = query.data
 
   try {
-    const [items, total] = await Promise.all([
+    // Fetch live fundraisers from external sources
+    const liveItems = await getLiveFundraisers()
+    const liveFundraisers = liveItems.map(toLocalFundraiser)
+
+    // Fetch local fundraisers from DB
+    const [localItems, total] = await Promise.all([
       prisma.fundraiser.findMany({
         include: {
           creator: { select: { id: true, name: true } },
@@ -23,7 +29,17 @@ export async function GET(request: NextRequest) {
       prisma.fundraiser.count(),
     ])
 
-    return NextResponse.json({ items, page, limit, total, totalPages: Math.ceil(total / limit) })
+    // Merge: live first, then local
+    const merged = [...liveFundraisers, ...localItems]
+    const paginated = merged.slice((page - 1) * limit, page * limit)
+
+    return NextResponse.json({
+      items: paginated,
+      page,
+      limit,
+      total: merged.length,
+      totalPages: Math.ceil(merged.length / limit),
+    })
   } catch {
     return NextResponse.json({ error: 'Failed to fetch fundraisers' }, { status: 500 })
   }
@@ -38,7 +54,6 @@ export async function POST(request: NextRequest) {
 
   try {
     const fundraiser = await prisma.fundraiser.create({
-      // creatorId comes from the verified token, never the body.
       data: { ...parsed.data, creatorId: auth.user.id },
       include: { creator: { select: { id: true, name: true } } },
     })

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/api-auth'
 import { publish } from '@/lib/events'
 import { campaignSchema, paginationSchema, parseBody, parseQuery } from '@/lib/validation'
+import { getLiveCampaigns, toLocalCampaign } from '@/lib/live-campaigns'
 
 export async function GET(request: NextRequest) {
   const query = parseQuery(request.url, paginationSchema)
@@ -10,10 +11,13 @@ export async function GET(request: NextRequest) {
   const { page, limit } = query.data
 
   try {
-    const [items, total] = await Promise.all([
+    // Fetch live campaigns from external sources
+    const liveItems = await getLiveCampaigns()
+    const liveCampaigns = liveItems.map(toLocalCampaign)
+
+    // Fetch local campaigns from DB
+    const [localItems, total] = await Promise.all([
       prisma.campaign.findMany({
-        // Public listing: names only. Emails are personal data and this
-        // endpoint is unauthenticated.
         include: {
           creator: { select: { id: true, name: true } },
           participants: { select: { id: true, name: true } },
@@ -26,7 +30,17 @@ export async function GET(request: NextRequest) {
       prisma.campaign.count(),
     ])
 
-    return NextResponse.json({ items, page, limit, total, totalPages: Math.ceil(total / limit) })
+    // Merge: live first, then local
+    const merged = [...liveCampaigns, ...localItems]
+    const paginated = merged.slice((page - 1) * limit, page * limit)
+
+    return NextResponse.json({
+      items: paginated,
+      page,
+      limit,
+      total: merged.length,
+      totalPages: Math.ceil(merged.length / limit),
+    })
   } catch {
     return NextResponse.json({ error: 'Failed to fetch campaigns' }, { status: 500 })
   }
@@ -41,7 +55,6 @@ export async function POST(request: NextRequest) {
 
   try {
     const campaign = await prisma.campaign.create({
-      // creatorId comes from the verified token, never from the body.
       data: { ...parsed.data, creatorId: auth.user.id },
       include: { creator: { select: { id: true, name: true } } },
     })
